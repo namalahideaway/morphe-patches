@@ -16,9 +16,11 @@ import android.os.Bundle;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import java.util.List;
+
 import app.morphe.extension.music.settings.Settings;
 import app.morphe.extension.shared.Logger;
-import app.morphe.extension.shared.Utils;
+import app.morphe.extension.shared.settings.Setting;
 
 @SuppressWarnings("unused")
 public final class ChangeStartPagePatch {
@@ -53,40 +55,26 @@ public final class ChangeStartPagePatch {
     }
 
     private static final String ACTION_MAIN = "android.intent.action.MAIN";
-
-    private static final String SETTINGS_CLASS = "com.google.android.apps.youtube.music.settings.SettingsCompatActivity";
-    private static final String SETTINGS_ATTRIBUTION_FRAGMENT_KEY = ":android:show_fragment";
-    private static final String SETTINGS_ATTRIBUTION_FRAGMENT_VALUE = "com.google.android.apps.youtube.music.settings.fragment.SettingsHeadersFragment";
-    private static final String SETTINGS_ATTRIBUTION_HEADER_KEY = ":android:no_headers";
-    private static final int SETTINGS_ATTRIBUTION_HEADER_VALUE = 1;
-
     private static final String SHORTCUT_ACTION = "com.google.android.youtube.music.action.shortcut";
     private static final String SHORTCUT_CLASS = "com.google.android.apps.youtube.music.activities.InternalMusicActivity";
     private static final String SHORTCUT_TYPE = "com.google.android.youtube.music.action.shortcut_type";
     private static final String SHORTCUT_ID_SEARCH = "Eh4IBRDTnQEYmgMiEwiZn+H0r5WLAxVV5OcDHcHRBmPqpd25AQA=";
     private static final int SHORTCUT_TYPE_SEARCH = 1;
 
-    private static void openSearch() {
-        Activity mActivity = Utils.getActivity();
-        if (mActivity == null) {
-            return;
-        }
-        Intent intent = new Intent();
-        setSearchIntent(mActivity, intent);
-        mActivity.startActivity(intent);
-    }
+    private static boolean appLaunched = false;
+    private static boolean forceHome = false;
+    private static long lastBackPressTime = 0;
 
-    private static void openSetting() {
-        Activity mActivity = Utils.getActivity();
-        if (mActivity == null) {
-            return;
+    public static class ChangeStartPageTypeAvailability implements Setting.Availability {
+        @Override
+        public boolean isAvailable() {
+            return Settings.CHANGE_START_PAGE.get() != StartPage.DEFAULT;
         }
-        Intent intent = new Intent();
-        intent.setPackage(mActivity.getPackageName());
-        intent.setClassName(mActivity, SETTINGS_CLASS);
-        intent.putExtra(SETTINGS_ATTRIBUTION_FRAGMENT_KEY, SETTINGS_ATTRIBUTION_FRAGMENT_VALUE);
-        intent.putExtra(SETTINGS_ATTRIBUTION_HEADER_KEY, SETTINGS_ATTRIBUTION_HEADER_VALUE);
-        mActivity.startActivity(intent);
+
+        @Override
+        public List<Setting<?>> getParentSettings() {
+            return List.of(Settings.CHANGE_START_PAGE);
+        }
     }
 
     private static void setSearchIntent(Activity mActivity, Intent intent) {
@@ -98,6 +86,11 @@ public final class ChangeStartPagePatch {
     }
 
     public static String overrideBrowseId(@Nullable String original) {
+        if (forceHome && "FEmusic_home".equals(original)) {
+            forceHome = false;
+            return original;
+        }
+
         StartPage startPage = Settings.CHANGE_START_PAGE.get();
 
         if (!startPage.isBrowseId()) {
@@ -108,11 +101,18 @@ public final class ChangeStartPagePatch {
             return original;
         }
 
+        boolean changeAlways = Settings.CHANGE_START_PAGE_ALWAYS.get();
+        if (!changeAlways && appLaunched) {
+            Logger.printDebug(() -> "Ignore override browseId as the app already launched");
+            return original;
+        }
+
         String overrideBrowseId = startPage.id;
         if (overrideBrowseId.isEmpty()) {
             return original;
         }
 
+        appLaunched = true;
         Logger.printDebug(() -> "Changing browseId to: " + startPage.name());
         return overrideBrowseId;
     }
@@ -132,5 +132,32 @@ public final class ChangeStartPagePatch {
             setSearchIntent(activity, searchIntent);
             activity.startActivity(searchIntent);
         }
+    }
+
+    /**
+     * Intercepts onBackPressed at the Activity level when the app is about to close.
+     * @return true to continue with original back behavior (minimizes), false to consume it (routes to home).
+     */
+    public static boolean onBackPressed(Activity activity) {
+        StartPage startPage = Settings.CHANGE_START_PAGE.get();
+        if (startPage == StartPage.DEFAULT) {
+            return true;
+        }
+
+        long currentTime = System.currentTimeMillis();
+        if (currentTime - lastBackPressTime < 2000) {
+            return true;
+        }
+
+        lastBackPressTime = currentTime;
+        forceHome = true;
+
+        Intent intent = activity.getPackageManager().getLaunchIntentForPackage(activity.getPackageName());
+        if (intent != null) {
+            intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            activity.startActivity(intent);
+        }
+
+        return false;
     }
 }
