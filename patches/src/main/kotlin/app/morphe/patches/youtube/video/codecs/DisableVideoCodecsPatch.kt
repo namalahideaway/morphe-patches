@@ -1,9 +1,11 @@
 package app.morphe.patches.youtube.video.codecs
 
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructionsWithLabels
+import app.morphe.patcher.extensions.InstructionExtensions.getInstruction
+import app.morphe.patcher.extensions.InstructionExtensions.instructionsOrNull
 import app.morphe.patcher.extensions.InstructionExtensions.replaceInstruction
 import app.morphe.patcher.patch.bytecodePatch
-import app.morphe.patches.all.misc.transformation.transformInstructionsPatch
+import app.morphe.patcher.util.proxy.mutableTypes.MutableMethod
 import app.morphe.patches.shared.misc.settings.preference.SwitchPreference
 import app.morphe.patches.youtube.misc.extension.sharedExtensionPatch
 import app.morphe.patches.youtube.misc.settings.PreferenceScreen
@@ -23,43 +25,44 @@ val disableVideoCodecsPatch = bytecodePatch(
 ) {
     dependsOn(
         sharedExtensionPatch,
-        settingsPatch,
-        /**
-         * Override all calls of `getSupportedHdrTypes`.
-         */
-        transformInstructionsPatch(
-            filterMap = filterMap@{ classDef, _, instruction, instructionIndex ->
-                if (classDef.type.startsWith("Lapp/morphe/")) {
-                    return@filterMap null
-                }
-
-                val reference = instruction.getReference<MethodReference>()
-                if (reference?.definingClass == $$"Landroid/view/Display$HdrCapabilities;"
-                    && reference.name == "getSupportedHdrTypes") {
-                    return@filterMap instruction to instructionIndex
-                }
-                return@filterMap null
-            },
-            transform = { method, entry ->
-                val (instruction, index) = entry
-                val register = (instruction as FiveRegisterInstruction).registerC
-
-                method.replaceInstruction(
-                    index,
-                    "invoke-static/range { v$register .. v$register }, $EXTENSION_CLASS->" +
-                            $$"disableHdrVideo(Landroid/view/Display$HdrCapabilities;)[I",
-                )
-            }
-        )
+        settingsPatch
     )
 
     compatibleWith(COMPATIBILITY_YOUTUBE)
 
     execute {
+        classDefForEach { classDef ->
+            if (classDef.type.startsWith("Lapp/morphe/")) return@classDefForEach
+
+            classDef.methods.forEach { method ->
+                val mutableMethod = method as MutableMethod
+                val instructionsIterable = mutableMethod.instructionsOrNull ?: return@forEach
+                val targetIndices = instructionsIterable.mapIndexedNotNull { index, instruction ->
+                    val reference = instruction.getReference<MethodReference>()
+                    if (reference?.definingClass == $$"Landroid/view/Display$HdrCapabilities;" &&
+                        reference.name == "getSupportedHdrTypes"
+                    ) {
+                        return@mapIndexedNotNull index
+                    }
+                    null
+                }
+
+                targetIndices.reversed().forEach { index ->
+                    val instruction = mutableMethod.getInstruction<FiveRegisterInstruction>(index)
+                    val register = instruction.registerC
+
+                    mutableMethod.replaceInstruction(
+                        index,
+                        $$"invoke-static/range { v$$register .. v$$register }, $$EXTENSION_CLASS->disableHdrVideo(Landroid/view/Display$HdrCapabilities;)[I"
+                    )
+                }
+            }
+        }
+
         PreferenceScreen.VIDEO.addPreferences(
             SwitchPreference("morphe_disable_hdr_video"),
             SwitchPreference(
-                key ="morphe_force_avc_codec",
+                key = "morphe_force_avc_codec",
                 tag = "app.morphe.extension.youtube.settings.preference.ForceAVCSwitchPreference"
             )
         )

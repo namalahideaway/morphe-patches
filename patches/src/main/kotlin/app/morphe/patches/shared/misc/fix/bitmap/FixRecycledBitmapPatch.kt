@@ -7,44 +7,57 @@
 
 package app.morphe.patches.shared.misc.fix.bitmap
 
-import app.morphe.patches.all.misc.transformation.IMethodCall
-import app.morphe.patches.all.misc.transformation.filterMapInstruction35c
-import app.morphe.patches.all.misc.transformation.transformInstructionsPatch
+import app.morphe.patcher.extensions.InstructionExtensions.getInstruction
+import app.morphe.patcher.extensions.InstructionExtensions.instructionsOrNull
+import app.morphe.patcher.extensions.InstructionExtensions.replaceInstruction
+import app.morphe.patcher.patch.bytecodePatch
+import app.morphe.patcher.util.proxy.mutableTypes.MutableMethod
+import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
+import com.android.tools.smali.dexlib2.iface.instruction.formats.Instruction35c
+import com.android.tools.smali.dexlib2.iface.reference.MethodReference
 
 private const val EXTENSION_CLASS =
     "Lapp/morphe/extension/shared/patches/FixRecycledBitmapPatch;"
 
-@Suppress("unused")
-private enum class MethodCall(
-    override val definedClassName: String,
-    override val methodName: String,
-    override val methodParams: Array<String>,
-    override val methodReturnType: String,
-) : IMethodCall {
-    PutBitmapFramework(
-        $$"Landroid/media/MediaMetadata$Builder;",
-        "putBitmap",
-        arrayOf("Ljava/lang/String;", "Landroid/graphics/Bitmap;"),
-        $$"Landroid/media/MediaMetadata$Builder;",
-    );
-}
+val fixRecycledBitmapPatch = bytecodePatch(
+    description = "Fixes recycled bitmap crashes by routing putBitmap through the extension class."
+) {
+    execute {
+        classDefForEach { classDef ->
+            if (classDef.type.startsWith("Lapp/morphe/extension")) return@classDefForEach
 
-val fixRecycledBitmapPatch = transformInstructionsPatch(
-    filterMap = { classDef, _, instruction, instructionIndex ->
-        filterMapInstruction35c<MethodCall>(
-            "Lapp/morphe/extension",
-            classDef,
-            instruction,
-            instructionIndex,
-        )
-    },
-    transform = transform@{ mutableMethod, entry ->
-        val (methodCall, _, instructionIndex) = entry
-        
-        methodCall.replaceInvokeVirtualWithExtension(
-            EXTENSION_CLASS,
-            mutableMethod,
-            instructionIndex
-        )
+            classDef.methods.forEach { method ->
+                val mutableMethod = method as MutableMethod
+                val instructionsIterable = mutableMethod.instructionsOrNull ?: return@forEach
+                val targetIndices = instructionsIterable.mapIndexedNotNull { index, instruction ->
+                    if (instruction.opcode.name == "invoke-virtual" && instruction is ReferenceInstruction) {
+                        val ref = instruction.reference as? MethodReference
+                        val isTargetMethod = ref?.definingClass == $$"Landroid/media/MediaMetadata$Builder;" &&
+                                ref.name == "putBitmap" &&
+                                ref.parameterTypes.joinToString("") == "Ljava/lang/String;Landroid/graphics/Bitmap;"
+
+                        if (isTargetMethod) index else null
+                    } else {
+                        null
+                    }
+                }
+
+                targetIndices.reversed().forEach { index ->
+                    val instruction = mutableMethod.getInstruction<Instruction35c>(index)
+                    val registers = listOf(
+                        instruction.registerC,
+                        instruction.registerD,
+                        instruction.registerE,
+                        instruction.registerF,
+                        instruction.registerG
+                    ).take(instruction.registerCount).joinToString(", ") { "v$it" }
+
+                    val replacementSmali =
+                        $$"invoke-static {$$registers}, $$EXTENSION_CLASS->putBitmap(Landroid/media/MediaMetadata$Builder;Ljava/lang/String;Landroid/graphics/Bitmap;)Landroid/media/MediaMetadata$Builder;"
+
+                    mutableMethod.replaceInstruction(index, replacementSmali)
+                }
+            }
+        }
     }
-)
+}

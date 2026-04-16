@@ -5,12 +5,12 @@ import app.morphe.patcher.checkCast
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructionsWithLabels
 import app.morphe.patcher.extensions.InstructionExtensions.getInstruction
+import app.morphe.patcher.extensions.InstructionExtensions.instructionsOrNull
+import app.morphe.patcher.extensions.InstructionExtensions.replaceInstruction
 import app.morphe.patcher.fieldAccess
 import app.morphe.patcher.patch.bytecodePatch
 import app.morphe.patcher.string
-import app.morphe.patches.all.misc.transformation.IMethodCall
-import app.morphe.patches.all.misc.transformation.filterMapInstruction35c
-import app.morphe.patches.all.misc.transformation.transformInstructionsPatch
+import app.morphe.patcher.util.proxy.mutableTypes.MutableMethod
 import app.morphe.patches.shared.misc.settings.preference.PreferenceScreenPreference
 import app.morphe.patches.shared.misc.settings.preference.SwitchPreference
 import app.morphe.patches.youtube.misc.settings.PreferenceScreen
@@ -19,8 +19,11 @@ import app.morphe.patches.youtube.shared.Constants.COMPATIBILITY_YOUTUBE
 import app.morphe.util.getReference
 import com.android.tools.smali.dexlib2.AccessFlags
 import com.android.tools.smali.dexlib2.Opcode
+import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.TwoRegisterInstruction
+import com.android.tools.smali.dexlib2.iface.instruction.formats.Instruction35c
 import com.android.tools.smali.dexlib2.iface.reference.FieldReference
+import com.android.tools.smali.dexlib2.iface.reference.MethodReference
 
 private const val EXTENSION_CLASS_PREFIX =
     "Lapp/morphe/extension/youtube/patches/DisableHapticFeedbackPatch"
@@ -32,31 +35,54 @@ val disableHapticFeedbackPatch = bytecodePatch(
     name = "Disable haptic feedback",
     description = "Adds an option to disable haptic feedback in the player for various actions.",
 ) {
-    dependsOn(
-        settingsPatch,
-        transformInstructionsPatch(
-            filterMap = { classDef, _, instruction, instructionIndex ->
-                filterMapInstruction35c<MethodCall>(
-                    EXTENSION_CLASS_PREFIX,
-                    classDef,
-                    instruction,
-                    instructionIndex,
-                )
-            },
-            transform = { method, entry ->
-                val (methodType, _, instructionIndex) = entry
-                methodType.replaceInvokeVirtualWithExtension(
-                    EXTENSION_CLASS,
-                    method,
-                    instructionIndex,
-                )
-            },
-        ),
-    )
+    dependsOn(settingsPatch)
 
     compatibleWith(COMPATIBILITY_YOUTUBE)
 
     execute {
+        classDefForEach { classDef ->
+            if (classDef.type.startsWith(EXTENSION_CLASS_PREFIX)) return@classDefForEach
+
+            classDef.methods.forEach { method ->
+                val mutableMethod = method as MutableMethod
+                val instructionsIterable = mutableMethod.instructionsOrNull ?: return@forEach
+                val targetIndices = instructionsIterable.mapIndexedNotNull { index, instruction ->
+                    if (instruction.opcode.name == "invoke-virtual" && instruction is ReferenceInstruction) {
+                        val ref = instruction.reference as? MethodReference
+                        if (ref?.definingClass == "Landroid/os/Vibrator;" && ref.name == "vibrate" && ref.returnType == "V") {
+                            val paramTypes = ref.parameterTypes.joinToString("")
+                            if (paramTypes == "Landroid/os/VibrationEffect;" || paramTypes == "J") {
+                                return@mapIndexedNotNull index
+                            }
+                        }
+                    }
+                    null
+                }
+
+                targetIndices.reversed().forEach { index ->
+                    val instruction = mutableMethod.getInstruction<Instruction35c>(index)
+                    val ref = instruction.reference as MethodReference
+                    val paramType = ref.parameterTypes.joinToString("")
+
+                    val registers = listOf(
+                        instruction.registerC,
+                        instruction.registerD,
+                        instruction.registerE,
+                        instruction.registerF,
+                        instruction.registerG
+                    ).take(instruction.registerCount).joinToString(", ") { "v$it" }
+
+                    val replacementSmali = if (paramType == "Landroid/os/VibrationEffect;") {
+                        "invoke-static {$registers}, $EXTENSION_CLASS->vibrate(Landroid/os/Vibrator;Landroid/os/VibrationEffect;)V"
+                    } else {
+                        "invoke-static {$registers}, $EXTENSION_CLASS->vibrate(Landroid/os/Vibrator;J)V"
+                    }
+
+                    mutableMethod.replaceInstruction(index, replacementSmali)
+                }
+            }
+        }
+
         PreferenceScreen.PLAYER.addPreferences(
             PreferenceScreenPreference(
                 "morphe_disable_haptic_feedback",
@@ -124,26 +150,4 @@ val disableHapticFeedbackPatch = bytecodePatch(
             }
         }
     }
-}
-
-// Information about method calls we want to replace
-@Suppress("unused")
-private enum class MethodCall(
-    override val definedClassName: String,
-    override val methodName: String,
-    override val methodParams: Array<String>,
-    override val methodReturnType: String,
-) : IMethodCall {
-    VibrationEffect(
-        "Landroid/os/Vibrator;",
-        "vibrate",
-        arrayOf("Landroid/os/VibrationEffect;"),
-        "V",
-    ),
-    VibrationMilliseconds(
-        "Landroid/os/Vibrator;",
-        "vibrate",
-        arrayOf("J"),
-        "V",
-    ),
 }

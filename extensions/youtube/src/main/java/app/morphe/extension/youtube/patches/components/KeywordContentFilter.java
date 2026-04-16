@@ -48,7 +48,7 @@ import app.morphe.extension.youtube.shared.PlayerType;
  *   will always be hidden.  This patch checks for some words of these words.
  * - When using whole word syntax, some keywords may need additional pluralized variations.
  */
-@SuppressWarnings("unused")
+@SuppressWarnings({"unused", "unchecked"})
 final class KeywordContentFilter extends Filter {
 
     /**

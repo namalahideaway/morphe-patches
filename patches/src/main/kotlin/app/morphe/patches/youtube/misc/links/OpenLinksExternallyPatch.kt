@@ -1,8 +1,10 @@
 package app.morphe.patches.youtube.misc.links
 
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
+import app.morphe.patcher.extensions.InstructionExtensions.getInstructionOrNull
+import app.morphe.patcher.extensions.InstructionExtensions.instructionsOrNull
 import app.morphe.patcher.patch.bytecodePatch
-import app.morphe.patches.all.misc.transformation.transformInstructionsPatch
+import app.morphe.patcher.util.proxy.mutableTypes.MutableMethod
 import app.morphe.patches.shared.misc.settings.preference.SwitchPreference
 import app.morphe.patches.youtube.misc.settings.PreferenceScreen
 import app.morphe.patches.youtube.shared.Constants.COMPATIBILITY_YOUTUBE
@@ -14,34 +16,42 @@ val openLinksExternallyPatch = bytecodePatch(
     name = "Open links externally",
     description = "Adds an option to always open links in your browser instead of with the in-app browser.",
 ) {
-    dependsOn(
-        transformInstructionsPatch(
-            filterMap = filterMap@{ _, _, instruction, instructionIndex ->
-                if (instruction !is ReferenceInstruction) return@filterMap null
-                val reference = instruction.reference as? StringReference ?: return@filterMap null
-
-                if (reference.string != "android.support.customtabs.action.CustomTabsService") return@filterMap null
-
-                return@filterMap instructionIndex to (instruction as OneRegisterInstruction).registerA
-            },
-            transform = { mutableMethod, entry ->
-                val (intentStringIndex, register) = entry
-
-                // Hook the intent string.
-                mutableMethod.addInstructions(
-                    intentStringIndex + 1,
-                    """
-                        invoke-static {v$register}, Lapp/morphe/extension/youtube/patches/OpenLinksExternallyPatch;->getIntent(Ljava/lang/String;)Ljava/lang/String;
-                        move-result-object v$register
-                    """,
-                )
-            },
-        ),
-    )
-
     compatibleWith(COMPATIBILITY_YOUTUBE)
 
     execute {
+        classDefForEach { classDef ->
+            if (classDef.type.startsWith("Lapp/morphe/extension")) return@classDefForEach
+
+            classDef.methods.forEach { method ->
+                val mutableMethod = method as MutableMethod
+                val instructionsIterable = mutableMethod.instructionsOrNull ?: return@forEach
+
+                val targetIndices = instructionsIterable.mapIndexedNotNull { index, instruction ->
+                    if (instruction is ReferenceInstruction) {
+                        val reference = instruction.reference as? StringReference
+                        if (reference?.string == "android.support.customtabs.action.CustomTabsService") {
+                            return@mapIndexedNotNull index
+                        }
+                    }
+                    null
+                }
+
+                targetIndices.reversed().forEach { index ->
+                    val instruction = mutableMethod.getInstructionOrNull<OneRegisterInstruction>(index)
+                        ?: return@forEach
+                    val register = instruction.registerA
+
+                    mutableMethod.addInstructions(
+                        index + 1,
+                        """
+                            invoke-static {v$register}, Lapp/morphe/extension/youtube/patches/OpenLinksExternallyPatch;->getIntent(Ljava/lang/String;)Ljava/lang/String;
+                            move-result-object v$register
+                        """
+                    )
+                }
+            }
+        }
+
         PreferenceScreen.MISC.addPreferences(
             SwitchPreference("morphe_external_browser"),
         )
