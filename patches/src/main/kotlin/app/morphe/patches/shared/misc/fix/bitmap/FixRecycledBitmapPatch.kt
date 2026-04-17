@@ -7,13 +7,12 @@
 
 package app.morphe.patches.shared.misc.fix.bitmap
 
-import app.morphe.patcher.extensions.InstructionExtensions.getInstruction
 import app.morphe.patcher.extensions.InstructionExtensions.instructionsOrNull
 import app.morphe.patcher.extensions.InstructionExtensions.replaceInstruction
 import app.morphe.patcher.patch.bytecodePatch
 import app.morphe.patcher.util.proxy.mutableTypes.MutableMethod
+import app.morphe.util.fiveRegisters
 import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
-import com.android.tools.smali.dexlib2.iface.instruction.formats.Instruction35c
 import com.android.tools.smali.dexlib2.iface.reference.MethodReference
 
 private const val EXTENSION_CLASS =
@@ -43,14 +42,7 @@ val fixRecycledBitmapPatch = bytecodePatch(
                 }
 
                 targetIndices.reversed().forEach { index ->
-                    val instruction = mutableMethod.getInstruction<Instruction35c>(index)
-                    val registers = listOf(
-                        instruction.registerC,
-                        instruction.registerD,
-                        instruction.registerE,
-                        instruction.registerF,
-                        instruction.registerG
-                    ).take(instruction.registerCount).joinToString(", ") { "v$it" }
+                    val registers = mutableMethod.fiveRegisters(index)
 
                     val replacementSmali =
                         $$"invoke-static {$$registers}, $$EXTENSION_CLASS->putBitmap(Landroid/media/MediaMetadata$Builder;Ljava/lang/String;Landroid/graphics/Bitmap;)Landroid/media/MediaMetadata$Builder;"
