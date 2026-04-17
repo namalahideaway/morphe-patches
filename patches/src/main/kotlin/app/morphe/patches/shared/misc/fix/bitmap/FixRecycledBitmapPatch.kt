@@ -7,10 +7,9 @@
 
 package app.morphe.patches.shared.misc.fix.bitmap
 
-import app.morphe.patcher.extensions.InstructionExtensions.instructionsOrNull
 import app.morphe.patcher.extensions.InstructionExtensions.replaceInstruction
 import app.morphe.patcher.patch.bytecodePatch
-import app.morphe.patcher.util.proxy.mutableTypes.MutableMethod
+import app.morphe.util.findMutableMethodOf
 import app.morphe.util.fiveRegisters
 import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
 import com.android.tools.smali.dexlib2.iface.reference.MethodReference
@@ -26,8 +25,7 @@ val fixRecycledBitmapPatch = bytecodePatch(
             if (classDef.type.startsWith("Lapp/morphe/extension")) return@classDefForEach
 
             classDef.methods.forEach { method ->
-                val mutableMethod = method as MutableMethod
-                val instructionsIterable = mutableMethod.instructionsOrNull ?: return@forEach
+                val instructionsIterable = method.implementation?.instructions ?: return@forEach
                 val targetIndices = instructionsIterable.mapIndexedNotNull { index, instruction ->
                     if (instruction.opcode.name == "invoke-virtual" && instruction is ReferenceInstruction) {
                         val ref = instruction.reference as? MethodReference
@@ -41,13 +39,16 @@ val fixRecycledBitmapPatch = bytecodePatch(
                     }
                 }
 
-                targetIndices.reversed().forEach { index ->
-                    val registers = mutableMethod.fiveRegisters(index)
+                if (targetIndices.isNotEmpty()) {
+                    val mutableMethod = mutableClassDefBy(classDef.type).findMutableMethodOf(method)
 
-                    val replacementSmali =
-                        $$"invoke-static {$$registers}, $$EXTENSION_CLASS->putBitmap(Landroid/media/MediaMetadata$Builder;Ljava/lang/String;Landroid/graphics/Bitmap;)Landroid/media/MediaMetadata$Builder;"
+                    targetIndices.reversed().forEach { index ->
+                        val registers = mutableMethod.fiveRegisters(index)
+                        val replacementSmali =
+                            $$"invoke-static {$$registers}, $$EXTENSION_CLASS->putBitmap(Landroid/media/MediaMetadata$Builder;Ljava/lang/String;Landroid/graphics/Bitmap;)Landroid/media/MediaMetadata$Builder;"
 
-                    mutableMethod.replaceInstruction(index, replacementSmali)
+                        mutableMethod.replaceInstruction(index, replacementSmali)
+                    }
                 }
             }
         }

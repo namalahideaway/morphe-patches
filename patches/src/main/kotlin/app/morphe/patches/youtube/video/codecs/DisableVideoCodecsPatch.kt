@@ -2,15 +2,14 @@ package app.morphe.patches.youtube.video.codecs
 
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructionsWithLabels
 import app.morphe.patcher.extensions.InstructionExtensions.getInstruction
-import app.morphe.patcher.extensions.InstructionExtensions.instructionsOrNull
 import app.morphe.patcher.extensions.InstructionExtensions.replaceInstruction
 import app.morphe.patcher.patch.bytecodePatch
-import app.morphe.patcher.util.proxy.mutableTypes.MutableMethod
 import app.morphe.patches.shared.misc.settings.preference.SwitchPreference
 import app.morphe.patches.youtube.misc.extension.sharedExtensionPatch
 import app.morphe.patches.youtube.misc.settings.PreferenceScreen
 import app.morphe.patches.youtube.misc.settings.settingsPatch
 import app.morphe.patches.youtube.shared.Constants.COMPATIBILITY_YOUTUBE
+import app.morphe.util.findMutableMethodOf
 import app.morphe.util.getReference
 import com.android.tools.smali.dexlib2.iface.instruction.FiveRegisterInstruction
 import com.android.tools.smali.dexlib2.iface.reference.MethodReference
@@ -35,8 +34,7 @@ val disableVideoCodecsPatch = bytecodePatch(
             if (classDef.type.startsWith("Lapp/morphe/")) return@classDefForEach
 
             classDef.methods.forEach { method ->
-                val mutableMethod = method as MutableMethod
-                val instructionsIterable = mutableMethod.instructionsOrNull ?: return@forEach
+                val instructionsIterable = method.implementation?.instructions ?: return@forEach
                 val targetIndices = instructionsIterable.mapIndexedNotNull { index, instruction ->
                     val reference = instruction.getReference<MethodReference>()
                     if (reference?.definingClass == $$"Landroid/view/Display$HdrCapabilities;" &&
@@ -47,14 +45,18 @@ val disableVideoCodecsPatch = bytecodePatch(
                     null
                 }
 
-                targetIndices.reversed().forEach { index ->
-                    val instruction = mutableMethod.getInstruction<FiveRegisterInstruction>(index)
-                    val register = instruction.registerC
+                if (targetIndices.isNotEmpty()) {
+                    val mutableMethod = mutableClassDefBy(classDef.type).findMutableMethodOf(method)
 
-                    mutableMethod.replaceInstruction(
-                        index,
-                        $$"invoke-static/range { v$$register .. v$$register }, $$EXTENSION_CLASS->disableHdrVideo(Landroid/view/Display$HdrCapabilities;)[I"
-                    )
+                    targetIndices.reversed().forEach { index ->
+                        val instruction = mutableMethod.getInstruction<FiveRegisterInstruction>(index)
+                        val register = instruction.registerC
+
+                        mutableMethod.replaceInstruction(
+                            index,
+                            $$"invoke-static/range { v$$register .. v$$register }, $$EXTENSION_CLASS->disableHdrVideo(Landroid/view/Display$HdrCapabilities;)[I"
+                        )
+                    }
                 }
             }
         }

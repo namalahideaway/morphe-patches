@@ -2,12 +2,11 @@ package app.morphe.patches.youtube.misc.links
 
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
 import app.morphe.patcher.extensions.InstructionExtensions.getInstructionOrNull
-import app.morphe.patcher.extensions.InstructionExtensions.instructionsOrNull
 import app.morphe.patcher.patch.bytecodePatch
-import app.morphe.patcher.util.proxy.mutableTypes.MutableMethod
 import app.morphe.patches.shared.misc.settings.preference.SwitchPreference
 import app.morphe.patches.youtube.misc.settings.PreferenceScreen
 import app.morphe.patches.youtube.shared.Constants.COMPATIBILITY_YOUTUBE
+import app.morphe.util.findMutableMethodOf
 import com.android.tools.smali.dexlib2.iface.instruction.OneRegisterInstruction
 import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
 import com.android.tools.smali.dexlib2.iface.reference.StringReference
@@ -23,9 +22,7 @@ val openLinksExternallyPatch = bytecodePatch(
             if (classDef.type.startsWith("Lapp/morphe/extension")) return@classDefForEach
 
             classDef.methods.forEach { method ->
-                val mutableMethod = method as MutableMethod
-                val instructionsIterable = mutableMethod.instructionsOrNull ?: return@forEach
-
+                val instructionsIterable = method.implementation?.instructions ?: return@forEach
                 val targetIndices = instructionsIterable.mapIndexedNotNull { index, instruction ->
                     if (instruction is ReferenceInstruction) {
                         val reference = instruction.reference as? StringReference
@@ -36,18 +33,22 @@ val openLinksExternallyPatch = bytecodePatch(
                     null
                 }
 
-                targetIndices.reversed().forEach { index ->
-                    val instruction = mutableMethod.getInstructionOrNull<OneRegisterInstruction>(index)
-                        ?: return@forEach
-                    val register = instruction.registerA
+                if (targetIndices.isNotEmpty()) {
+                    val mutableMethod = mutableClassDefBy(classDef.type).findMutableMethodOf(method)
 
-                    mutableMethod.addInstructions(
-                        index + 1,
-                        """
-                            invoke-static {v$register}, Lapp/morphe/extension/youtube/patches/OpenLinksExternallyPatch;->getIntent(Ljava/lang/String;)Ljava/lang/String;
-                            move-result-object v$register
-                        """
-                    )
+                    targetIndices.reversed().forEach { index ->
+                        val instruction = mutableMethod.getInstructionOrNull<OneRegisterInstruction>(index)
+                            ?: return@forEach
+                        val register = instruction.registerA
+
+                        mutableMethod.addInstructions(
+                            index + 1,
+                            """
+                                invoke-static {v$register}, Lapp/morphe/extension/youtube/patches/OpenLinksExternallyPatch;->getIntent(Ljava/lang/String;)Ljava/lang/String;
+                                move-result-object v$register
+                            """
+                        )
+                    }
                 }
             }
         }

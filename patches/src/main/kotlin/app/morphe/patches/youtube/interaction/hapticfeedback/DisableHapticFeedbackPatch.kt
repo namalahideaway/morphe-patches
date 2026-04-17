@@ -5,17 +5,17 @@ import app.morphe.patcher.checkCast
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructionsWithLabels
 import app.morphe.patcher.extensions.InstructionExtensions.getInstruction
-import app.morphe.patcher.extensions.InstructionExtensions.instructionsOrNull
 import app.morphe.patcher.extensions.InstructionExtensions.replaceInstruction
 import app.morphe.patcher.fieldAccess
 import app.morphe.patcher.patch.bytecodePatch
 import app.morphe.patcher.string
-import app.morphe.patcher.util.proxy.mutableTypes.MutableMethod
 import app.morphe.patches.shared.misc.settings.preference.PreferenceScreenPreference
 import app.morphe.patches.shared.misc.settings.preference.SwitchPreference
 import app.morphe.patches.youtube.misc.settings.PreferenceScreen
 import app.morphe.patches.youtube.misc.settings.settingsPatch
 import app.morphe.patches.youtube.shared.Constants.COMPATIBILITY_YOUTUBE
+import app.morphe.util.findMutableMethodOf
+import app.morphe.util.fiveRegisters
 import app.morphe.util.getReference
 import com.android.tools.smali.dexlib2.AccessFlags
 import com.android.tools.smali.dexlib2.Opcode
@@ -44,8 +44,7 @@ val disableHapticFeedbackPatch = bytecodePatch(
             if (classDef.type.startsWith(EXTENSION_CLASS_PREFIX)) return@classDefForEach
 
             classDef.methods.forEach { method ->
-                val mutableMethod = method as MutableMethod
-                val instructionsIterable = mutableMethod.instructionsOrNull ?: return@forEach
+                val instructionsIterable = method.implementation?.instructions ?: return@forEach
                 val targetIndices = instructionsIterable.mapIndexedNotNull { index, instruction ->
                     if (instruction.opcode.name == "invoke-virtual" && instruction is ReferenceInstruction) {
                         val ref = instruction.reference as? MethodReference
@@ -59,26 +58,22 @@ val disableHapticFeedbackPatch = bytecodePatch(
                     null
                 }
 
-                targetIndices.reversed().forEach { index ->
-                    val instruction = mutableMethod.getInstruction<Instruction35c>(index)
-                    val ref = instruction.reference as MethodReference
-                    val paramType = ref.parameterTypes.joinToString("")
+                if (targetIndices.isNotEmpty()) {
+                    val mutableMethod = mutableClassDefBy(classDef.type).findMutableMethodOf(method)
 
-                    val registers = listOf(
-                        instruction.registerC,
-                        instruction.registerD,
-                        instruction.registerE,
-                        instruction.registerF,
-                        instruction.registerG
-                    ).take(instruction.registerCount).joinToString(", ") { "v$it" }
+                    targetIndices.reversed().forEach { index ->
+                        val instruction = mutableMethod.getInstruction<Instruction35c>(index)
+                        val ref = instruction.reference as MethodReference
+                        val paramType = ref.parameterTypes.joinToString("")
+                        val registers = mutableMethod.fiveRegisters(index)
+                        val replacementSmali = if (paramType == "Landroid/os/VibrationEffect;") {
+                            "invoke-static {$registers}, $EXTENSION_CLASS->vibrate(Landroid/os/Vibrator;Landroid/os/VibrationEffect;)V"
+                        } else {
+                            "invoke-static {$registers}, $EXTENSION_CLASS->vibrate(Landroid/os/Vibrator;J)V"
+                        }
 
-                    val replacementSmali = if (paramType == "Landroid/os/VibrationEffect;") {
-                        "invoke-static {$registers}, $EXTENSION_CLASS->vibrate(Landroid/os/Vibrator;Landroid/os/VibrationEffect;)V"
-                    } else {
-                        "invoke-static {$registers}, $EXTENSION_CLASS->vibrate(Landroid/os/Vibrator;J)V"
+                        mutableMethod.replaceInstruction(index, replacementSmali)
                     }
-
-                    mutableMethod.replaceInstruction(index, replacementSmali)
                 }
             }
         }
