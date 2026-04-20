@@ -21,7 +21,6 @@ import app.morphe.patches.shared.misc.settings.preference.ListPreference
 import app.morphe.patches.shared.misc.settings.preference.PreferenceCategory
 import app.morphe.patches.shared.misc.settings.preference.PreferenceScreenPreference.Sorting
 import app.morphe.patches.shared.misc.settings.preference.SwitchPreference
-import app.morphe.util.findFreeRegister
 import app.morphe.util.getReference
 import app.morphe.util.indexOfFirstInstructionReversedOrThrow
 import com.android.tools.smali.dexlib2.Opcode
@@ -80,6 +79,11 @@ val changeStartPagePatch = bytecodePatch(
         MusicActivityOnCreateFingerprint.method.addInstruction(
             0,
             "invoke-static/range { p0 .. p1 }, $EXTENSION_CLASS->overrideIntentActionOnCreate(Landroid/app/Activity;Landroid/os/Bundle;)V"
+        )
+
+        BrowserActivityOnNewIntentFingerprint.method.addInstruction(
+            0,
+            "invoke-static { p0, p1 }, $EXTENSION_CLASS->overrideIntentActionOnNewIntent(Landroid/app/Activity;Landroid/content/Intent;)V"
         )
 
         MusicActivityOnBackPressedFingerprint.let {

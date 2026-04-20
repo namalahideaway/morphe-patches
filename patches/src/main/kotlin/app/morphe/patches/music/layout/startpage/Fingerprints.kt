@@ -25,7 +25,14 @@ internal object ColdStartUpFingerprint : Fingerprint(
 internal object MusicActivityOnBackPressedFingerprint : Fingerprint(
     classFingerprint = MusicActivityOnCreateFingerprint,
     name = "onBackPressed",
-//    filters = listOf(
-//        methodCall(opcode = Opcode.INVOKE_SUPER, name = "onBackPressed")
-//    )
+    filters = listOf(
+        methodCall(opcode = Opcode.INVOKE_SUPER, name = "onBackPressed")
+    )
+)
+
+internal object BrowserActivityOnNewIntentFingerprint : Fingerprint(
+    definingClass = "Lcom/google/android/apps/youtube/music/browser/BrowserActivity;",
+    name = "onNewIntent",
+    returnType = "V",
+    parameters = listOf("Landroid/content/Intent;")
 )
