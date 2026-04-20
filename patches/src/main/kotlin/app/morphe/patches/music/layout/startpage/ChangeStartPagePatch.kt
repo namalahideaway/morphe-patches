@@ -22,11 +22,10 @@ import app.morphe.patches.shared.misc.settings.preference.PreferenceCategory
 import app.morphe.patches.shared.misc.settings.preference.PreferenceScreenPreference.Sorting
 import app.morphe.patches.shared.misc.settings.preference.SwitchPreference
 import app.morphe.util.findFreeRegister
+import app.morphe.util.getReference
+import app.morphe.util.indexOfFirstInstructionReversedOrThrow
 import com.android.tools.smali.dexlib2.Opcode
-import com.android.tools.smali.dexlib2.iface.instruction.OneRegisterInstruction
-import com.android.tools.smali.dexlib2.iface.reference.MethodReference
-import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
-import com.android.tools.smali.dexlib2.iface.reference.StringReference
+import com.android.tools.smali.dexlib2.iface.instruction.TwoRegisterInstruction
 import com.android.tools.smali.dexlib2.iface.reference.FieldReference
 
 private const val EXTENSION_CLASS = "Lapp/morphe/extension/music/patches/ChangeStartPagePatch;"
@@ -60,86 +59,42 @@ val changeStartPagePatch = bytecodePatch(
 
         ColdStartUpFingerprint.let {
             it.method.apply {
-                val instructions = implementation!!.instructions.toList()
-                val defaultBrowseIdIndex = instructions.indexOfFirst { instr ->
-                    instr.opcode == Opcode.CONST_STRING &&
-                            (instr as? ReferenceInstruction)?.reference.let { ref ->
-                                (ref as? StringReference)?.string == "FEmusic_home"
-                            }
+                val browseIdIndex = indexOfFirstInstructionReversedOrThrow(
+                    it.instructionMatches.last().index
+                ) {
+                    opcode == Opcode.IGET_OBJECT &&
+                            getReference<FieldReference>()?.type == "Ljava/lang/String;"
                 }
+                val browseIdRegister = getInstruction<TwoRegisterInstruction>(browseIdIndex).registerA
 
-                val browseIdIndex = instructions.withIndex().reversed().firstOrNull { (index, instr) ->
-                    index < defaultBrowseIdIndex &&
-                            instr.opcode == Opcode.IGET_OBJECT &&
-                            (instr as? ReferenceInstruction)?.reference.let { ref ->
-                                (ref as? FieldReference)?.type == "Ljava/lang/String;"
-                            }
-                }?.index ?: -1
-
-                if (browseIdIndex != -1) {
-                    val browseIdRegister = (instructions[browseIdIndex] as com.android.tools.smali.dexlib2.iface.instruction.TwoRegisterInstruction).registerA
-                    addInstructions(
-                        browseIdIndex + 1,
-                        """
-                            invoke-static/range { v$browseIdRegister .. v$browseIdRegister }, $EXTENSION_CLASS->overrideBrowseId(Ljava/lang/String;)Ljava/lang/String;
-                            move-result-object v$browseIdRegister
-                        """
-                    )
-                } else {
-                    val returnIndices = instructions.mapIndexedNotNull { index, instr ->
-                        if (instr.opcode == Opcode.RETURN_OBJECT) index else null
-                    }
-
-                    for (returnIndex in returnIndices.reversed()) {
-                        val returnRegister = getInstruction<OneRegisterInstruction>(returnIndex).registerA
-                        addInstructions(
-                            returnIndex,
-                            """
-                                invoke-static/range { v$returnRegister .. v$returnRegister }, $EXTENSION_CLASS->overrideBrowseId(Ljava/lang/String;)Ljava/lang/String;
-                                move-result-object v$returnRegister
-                            """
-                        )
-                    }
-                }
+                addInstructions(
+                    browseIdIndex + 1,
+                    """
+                        invoke-static/range { v$browseIdRegister .. v$browseIdRegister }, $EXTENSION_CLASS->overrideBrowseId(Ljava/lang/String;)Ljava/lang/String;
+                        move-result-object v$browseIdRegister
+                    """
+                )
             }
         }
 
-        MusicActivityOnCreateFingerprint.let {
+        MusicActivityOnCreateFingerprint.method.addInstruction(
+            0,
+            "invoke-static/range { p0 .. p1 }, $EXTENSION_CLASS->overrideIntentActionOnCreate(Landroid/app/Activity;Landroid/os/Bundle;)V"
+        )
+
+        MusicActivityOnBackPressedFingerprint.let {
             it.method.apply {
-                val p0 = implementation!!.registerCount - 2
-                val p1 = p0 + 1
-
-                addInstruction(
+                addInstructionsWithLabels(
                     0,
-                    "invoke-static/range { v$p0 .. v$p1 }, $EXTENSION_CLASS->overrideIntentActionOnCreate(Landroid/app/Activity;Landroid/os/Bundle;)V"
+                    """
+                        invoke-static { p0 }, $EXTENSION_CLASS->onBackPressed(Landroid/app/Activity;)Z
+                        move-result v0
+                        if-eqz v0, :continue
+                        return-void
+                        :continue
+                        nop
+                    """
                 )
-
-                val musicActivityClass = definingClass
-                val methods = mutableClassDefBy(musicActivityClass).methods
-                methods.firstOrNull { m -> m.name == "onBackPressed" }?.let { onBackPressedMethod ->
-                    val instructions = onBackPressedMethod.implementation?.instructions?.toList() ?: return@let
-                    val superCallIndex = instructions.indexOfFirst { instr ->
-                        instr.opcode == Opcode.INVOKE_SUPER &&
-                                (instr as? ReferenceInstruction)?.reference?.let { ref ->
-                                    (ref as? MethodReference)?.name == "onBackPressed"
-                                } == true
-                    }
-
-                    if (superCallIndex != -1) {
-                        val freeRegister = findFreeRegister(superCallIndex)
-                        onBackPressedMethod.addInstructionsWithLabels(
-                            superCallIndex,
-                            """
-                                invoke-static { p0 }, $EXTENSION_CLASS->onBackPressed(Landroid/app/Activity;)Z
-                                move-result v$freeRegister
-                                if-eqz v$freeRegister, :continue
-                                return-void
-                                :continue
-                                nop
-                            """
-                        )
-                    }
-                }
             }
         }
     }

@@ -86,51 +86,61 @@ public final class ChangeStartPagePatch {
     }
 
     public static String overrideBrowseId(@Nullable String original) {
-        if (forceHome && "FEmusic_home".equals(original)) {
-            forceHome = false;
-            return original;
+        try {
+            if (forceHome && "FEmusic_home".equals(original)) {
+                forceHome = false;
+                return original;
+            }
+
+            StartPage startPage = Settings.CHANGE_START_PAGE.get();
+
+            if (!startPage.isBrowseId()) {
+                return original;
+            }
+
+            if (!"FEmusic_home".equals(original)) {
+                return original;
+            }
+
+            boolean changeAlways = Settings.CHANGE_START_PAGE_ALWAYS.get();
+            if (!changeAlways && appLaunched) {
+                Logger.printDebug(() -> "Ignore override browseId as the app already launched");
+                return original;
+            }
+
+            String overrideBrowseId = startPage.id;
+            if (overrideBrowseId.isEmpty()) {
+                return original;
+            }
+
+            appLaunched = true;
+            Logger.printDebug(() -> "Changing browseId to: " + startPage.name());
+            return overrideBrowseId;
+        } catch (Exception ex) {
+            Logger.printException(() -> "overrideBrowseId failure", ex);
         }
 
-        StartPage startPage = Settings.CHANGE_START_PAGE.get();
-
-        if (!startPage.isBrowseId()) {
-            return original;
-        }
-
-        if (!"FEmusic_home".equals(original)) {
-            return original;
-        }
-
-        boolean changeAlways = Settings.CHANGE_START_PAGE_ALWAYS.get();
-        if (!changeAlways && appLaunched) {
-            Logger.printDebug(() -> "Ignore override browseId as the app already launched");
-            return original;
-        }
-
-        String overrideBrowseId = startPage.id;
-        if (overrideBrowseId.isEmpty()) {
-            return original;
-        }
-
-        appLaunched = true;
-        Logger.printDebug(() -> "Changing browseId to: " + startPage.name());
-        return overrideBrowseId;
+        return original;
     }
 
-    public static void overrideIntentActionOnCreate(@NonNull Activity activity, @Nullable Bundle savedInstanceState) {
-        if (savedInstanceState != null) return;
+    public static void overrideIntentActionOnCreate(Activity activity, @Nullable Bundle savedInstanceState) {
+        try {
+            if (savedInstanceState != null) return;
 
-        StartPage startPage = Settings.CHANGE_START_PAGE.get();
-        if (startPage != StartPage.SEARCH) return;
+            StartPage startPage = Settings.CHANGE_START_PAGE.get();
+            if (startPage != StartPage.SEARCH) return;
 
-        Intent originalIntent = activity.getIntent();
-        if (originalIntent == null) return;
+            Intent originalIntent = activity.getIntent();
+            if (originalIntent == null) return;
 
-        if (ACTION_MAIN.equals(originalIntent.getAction())) {
-            Logger.printDebug(() -> "Cold start: Firing search activity directly");
-            Intent searchIntent = new Intent();
-            setSearchIntent(activity, searchIntent);
-            activity.startActivity(searchIntent);
+            if (ACTION_MAIN.equals(originalIntent.getAction())) {
+                Logger.printDebug(() -> "Cold start: Firing search activity directly");
+                Intent searchIntent = new Intent();
+                setSearchIntent(activity, searchIntent);
+                activity.startActivity(searchIntent);
+            }
+        } catch (Exception ex ){
+            Logger.printException(() -> "overrideIntentActionOnCreate failure", ex);
         }
     }
 
