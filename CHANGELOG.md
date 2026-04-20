@@ -1,3 +1,51 @@
+# [1.24.0-dev.14](https://github.com/MorpheApp/morphe-patches/compare/v1.24.0-dev.13...v1.24.0-dev.14) (2026-04-19)
+
+
+### Bug Fixes
+
+* **YouTube:** Resolve 20.47.62 crashing ([d472802](https://github.com/MorpheApp/morphe-patches/commit/d4728022e29c8babf811bf56f3b32174e81bdef7))
+
+# [1.24.0-dev.13](https://github.com/MorpheApp/morphe-patches/compare/v1.24.0-dev.12...v1.24.0-dev.13) (2026-04-19)
+
+
+### Bug Fixes
+
+* **YouTube:** Resolve app crash when opening community post ([41a5e66](https://github.com/MorpheApp/morphe-patches/commit/41a5e66b04afb51ff25d0b620e053c50605f1939))
+
+# [1.24.0-dev.12](https://github.com/MorpheApp/morphe-patches/compare/v1.24.0-dev.11...v1.24.0-dev.12) (2026-04-19)
+
+
+### Bug Fixes
+
+* **YouTube Music - Permanent repeat:** Resolve repeat state not being permanent ([#1193](https://github.com/MorpheApp/morphe-patches/issues/1193)) ([ab5a914](https://github.com/MorpheApp/morphe-patches/commit/ab5a914eb6968a0cdb3de9c2c0f45d1cd42cce4e))
+
+
+### Features
+
+* **YouTube - Hide layout components:** Add "Hide Settings button" setting for player ([#1187](https://github.com/MorpheApp/morphe-patches/issues/1187)) ([c665a5c](https://github.com/MorpheApp/morphe-patches/commit/c665a5ce8e39ff2e7ac10286372918ce47c35c21))
+* **YouTube Music - Hide ads:** Add "Hide fullscreen ads" setting ([#1192](https://github.com/MorpheApp/morphe-patches/issues/1192)) ([b1d704d](https://github.com/MorpheApp/morphe-patches/commit/b1d704d3be325c257abd4acce96516ec9038bd03))
+
+# [1.24.0-dev.11](https://github.com/MorpheApp/morphe-patches/compare/v1.24.0-dev.10...v1.24.0-dev.11) (2026-04-18)
+
+
+### Features
+
+* **Reddit:** Add experimental support for `2026.16.0` ([887c14d](https://github.com/MorpheApp/morphe-patches/commit/887c14d1d96a7d564cabcd301a03c5e7d19222cf))
+
+# [1.24.0-dev.10](https://github.com/MorpheApp/morphe-patches/compare/v1.24.0-dev.9...v1.24.0-dev.10) (2026-04-17)
+
+
+### Bug Fixes
+
+* **YouTube:** Fullscreen gradient does not show with bold player layout ([d019c01](https://github.com/MorpheApp/morphe-patches/commit/d019c0172d0a3f205f457c9bde873a7fbfb54bd9))
+
+
+### Features
+
+* **Reddit:** Support version `2026.10.0` ([ea135fb](https://github.com/MorpheApp/morphe-patches/commit/ea135fb439b784c1b4336cc5245b64d8af5b2697))
+* Use shared morphe-patches-library for common code ([#1068](https://github.com/MorpheApp/morphe-patches/issues/1068)) ([a0c5c06](https://github.com/MorpheApp/morphe-patches/commit/a0c5c060bd34159ebe3d13a172e61aa37860a887))
+* **YouTube:** Add experimental support for `21.16.240` ([5a0992c](https://github.com/MorpheApp/morphe-patches/commit/5a0992c98a5e560193706a200eebf51a49f9cb06))
+
 # [1.24.0-dev.9](https://github.com/MorpheApp/morphe-patches/compare/v1.24.0-dev.8...v1.24.0-dev.9) (2026-04-16)
 
 
