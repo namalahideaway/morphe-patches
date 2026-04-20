@@ -21,6 +21,7 @@ import java.util.List;
 import app.morphe.extension.music.settings.Settings;
 import app.morphe.extension.shared.Logger;
 import app.morphe.extension.shared.settings.Setting;
+import app.morphe.extension.shared.Utils;
 
 @SuppressWarnings("unused")
 public final class ChangeStartPagePatch {
@@ -55,14 +56,20 @@ public final class ChangeStartPagePatch {
     }
 
     private static final String ACTION_MAIN = "android.intent.action.MAIN";
+    private static final String SETTINGS_CLASS = "com.google.android.apps.youtube.music.settings.SettingsCompatActivity";
+    private static final String SETTINGS_ATTRIBUTION_FRAGMENT_KEY = ":android:show_fragment";
+    private static final String SETTINGS_ATTRIBUTION_FRAGMENT_VALUE = "com.google.android.apps.youtube.music.settings.fragment.SettingsHeadersFragment";
+    private static final String SETTINGS_ATTRIBUTION_HEADER_KEY = ":android:no_headers";
+    private static final int SETTINGS_ATTRIBUTION_HEADER_VALUE = 1;
+
     private static final String SHORTCUT_ACTION = "com.google.android.youtube.music.action.shortcut";
     private static final String SHORTCUT_CLASS = "com.google.android.apps.youtube.music.activities.InternalMusicActivity";
     private static final String SHORTCUT_TYPE = "com.google.android.youtube.music.action.shortcut_type";
     private static final String SHORTCUT_ID_SEARCH = "Eh4IBRDTnQEYmgMiEwiZn+H0r5WLAxVV5OcDHcHRBmPqpd25AQA=";
     private static final int SHORTCUT_TYPE_SEARCH = 1;
 
-    private static boolean appLaunched = false;
     private static boolean forceHome = false;
+    private static long appLaunchTime = 0;
     private static long lastBackPressTime = 0;
 
     public static class ChangeStartPageTypeAvailability implements Setting.Availability {
@@ -77,6 +84,25 @@ public final class ChangeStartPagePatch {
         }
     }
 
+    private static void openSearch() {
+        Activity mActivity = Utils.getActivity();
+        if (mActivity == null) return;
+        Intent intent = new Intent();
+        setSearchIntent(mActivity, intent);
+        mActivity.startActivity(intent);
+    }
+
+    private static void openSetting() {
+        Activity mActivity = Utils.getActivity();
+        if (mActivity == null) return;
+        Intent intent = new Intent();
+        intent.setPackage(mActivity.getPackageName());
+        intent.setClassName(mActivity, SETTINGS_CLASS);
+        intent.putExtra(SETTINGS_ATTRIBUTION_FRAGMENT_KEY, SETTINGS_ATTRIBUTION_FRAGMENT_VALUE);
+        intent.putExtra(SETTINGS_ATTRIBUTION_HEADER_KEY, SETTINGS_ATTRIBUTION_HEADER_VALUE);
+        mActivity.startActivity(intent);
+    }
+
     private static void setSearchIntent(Activity mActivity, Intent intent) {
         intent.setAction(SHORTCUT_ACTION);
         intent.setClassName(mActivity, SHORTCUT_CLASS);
@@ -87,17 +113,13 @@ public final class ChangeStartPagePatch {
 
     public static String overrideBrowseId(@Nullable String original) {
         try {
-            Logger.printDebug(() -> "Original browseId: " + original);
-
-            final boolean isMusicHome = "FEmusic_home".equals(original);
-
-            if (forceHome && isMusicHome) {
-                forceHome = false;
-                appLaunched = false;
+            if (!"FEmusic_home".equals(original)) {
                 return original;
             }
 
-            if (!isMusicHome) {
+            if (forceHome) {
+                forceHome = false;
+                Logger.printDebug(() -> "Back button escape: Allowing default FEmusic_home");
                 return original;
             }
 
@@ -106,56 +128,45 @@ public final class ChangeStartPagePatch {
                 return original;
             }
 
-            boolean changeAlways = Settings.CHANGE_START_PAGE_ALWAYS.get();
-            if (!changeAlways && appLaunched) {
-                Logger.printDebug(() -> "Ignore override browseId as the app already launched");
-                return original;
-            }
-
             String overrideBrowseId = startPage.id;
             if (overrideBrowseId.isEmpty()) {
                 return original;
             }
 
-            appLaunched = true;
+            boolean changeAlways = Settings.CHANGE_START_PAGE_ALWAYS.get();
+            if (!changeAlways) {
+                if (System.currentTimeMillis() - appLaunchTime > 5000) {
+                    return original;
+                }
+            }
+
             Logger.printDebug(() -> "Changing browseId to: " + startPage.name());
             return overrideBrowseId;
         } catch (Exception ex) {
             Logger.printException(() -> "overrideBrowseId failure", ex);
+            return original;
         }
-
-        return original;
     }
 
     public static void overrideIntentActionOnCreate(Activity activity, @Nullable Bundle savedInstanceState) {
         try {
-            if (savedInstanceState != null) {
-                Logger.printDebug(() -> "savedInstanceState is not null, not changing intent action");
+            if (savedInstanceState == null) {
+                appLaunchTime = System.currentTimeMillis();
+            } else {
                 return;
             }
 
             StartPage startPage = Settings.CHANGE_START_PAGE.get();
-            if (startPage != StartPage.SEARCH) {
-                Logger.printDebug(() -> "Start page is not search, not changing intent action: " + startPage);
-                return;
-            }
+            if (startPage != StartPage.SEARCH) return;
 
             Intent originalIntent = activity.getIntent();
-            if (originalIntent == null) {
-                return;
-            }
+            if (originalIntent == null) return;
 
             if (ACTION_MAIN.equals(originalIntent.getAction())) {
-                boolean changeAlways = Settings.CHANGE_START_PAGE_ALWAYS.get();
-                if (!changeAlways && appLaunched) {
-                    return;
-                }
-
                 Logger.printDebug(() -> "Cold start: Firing search activity directly");
                 Intent searchIntent = new Intent();
                 setSearchIntent(activity, searchIntent);
                 activity.startActivity(searchIntent);
-                appLaunched = true;
             }
         } catch (Exception ex ){
             Logger.printException(() -> "overrideIntentActionOnCreate failure", ex);
@@ -167,9 +178,6 @@ public final class ChangeStartPagePatch {
             if (intent == null) return;
 
             if (forceHome) {
-                Logger.printDebug(() -> "Back button escape: Resetting flags and allowing default routing");
-                forceHome = false;
-                appLaunched = false;
                 return;
             }
 
@@ -178,13 +186,12 @@ public final class ChangeStartPagePatch {
                 boolean changeAlways = Settings.CHANGE_START_PAGE_ALWAYS.get();
 
                 if (changeAlways && startPage == StartPage.SEARCH) {
-                    Logger.printDebug(() -> "Resume: Firing search activity directly");
+                    Logger.printDebug(() -> "Warm start: Firing search activity directly");
                     Intent searchIntent = new Intent();
                     setSearchIntent(activity, searchIntent);
                     activity.startActivity(searchIntent);
                 }
             }
-
         } catch (Exception ex ){
             Logger.printException(() -> "overrideIntentActionOnNewIntent failure", ex);
         }
@@ -195,17 +202,16 @@ public final class ChangeStartPagePatch {
      * @return true to continue with original back behavior (minimizes), false to consume it (routes to home).
      */
     public static boolean onBackPressed(Activity activity) {
-        Logger.printDebug(() -> "onBackPressed");
+        Logger.printDebug(() -> "onBackPressed intercepted");
 
         StartPage startPage = Settings.CHANGE_START_PAGE.get();
         if (startPage == StartPage.DEFAULT) {
-            Logger.printDebug(() -> "Ignoring default start page");
             return true;
         }
 
         final long currentTime = System.currentTimeMillis();
         if (currentTime - lastBackPressTime < 2000) {
-            Logger.printDebug(() -> "Ignoring duplicate fast back button press");
+            Logger.printDebug(() -> "Ignoring duplicate fast back press");
             return true;
         }
 
@@ -214,7 +220,7 @@ public final class ChangeStartPagePatch {
 
         Intent intent = activity.getPackageManager().getLaunchIntentForPackage(activity.getPackageName());
         if (intent != null) {
-            Logger.printDebug(() -> "Launching back button intent");
+            Logger.printDebug(() -> "Launching back button escape intent");
             intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
             activity.startActivity(intent);
         }
