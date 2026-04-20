@@ -70,7 +70,7 @@ public final class ChangeStartPagePatch {
 
     private static boolean forceHome = false;
     private static long appLaunchTime = 0;
-    private static long lastBackPressTime = 0;
+    private static boolean isStartPageOverridden = false;
 
     public static class ChangeStartPageTypeAvailability implements Setting.Availability {
         @Override
@@ -114,39 +114,29 @@ public final class ChangeStartPagePatch {
     public static String overrideBrowseId(@Nullable String original) {
         try {
             StartPage startPage = Settings.CHANGE_START_PAGE.get();
-            Logger.printDebug(() -> "Original: " + original + " startPage: " + startPage);
 
-            if (!"FEmusic_home".equals(original)) {
-                return original;
-            }
+            if (!"FEmusic_home".equals(original)) return original;
 
             if (forceHome) {
                 forceHome = false;
-                Logger.printDebug(() -> "Back button escape: Allowing default FEmusic_home");
                 return original;
             }
 
-            if (!startPage.isBrowseId()) {
-                return original;
-            }
+            if (!startPage.isBrowseId()) return original;
 
             String overrideBrowseId = startPage.id;
-            if (overrideBrowseId.isEmpty()) {
-                return original;
-            }
+            if (overrideBrowseId.isEmpty()) return original;
 
             final boolean changeAlways = Settings.CHANGE_START_PAGE_ALWAYS.get();
             if (!changeAlways) {
                 if (System.currentTimeMillis() - appLaunchTime > 5000) {
-                    Logger.printDebug(() -> "Ignoring browserId override due to recent app launch");
                     return original;
                 }
             }
 
-            Logger.printDebug(() -> "Changing browseId to: " + startPage.name());
+            isStartPageOverridden = true;
             return overrideBrowseId;
         } catch (Exception ex) {
-            Logger.printException(() -> "overrideBrowseId failure", ex);
             return original;
         }
     }
@@ -203,54 +193,32 @@ public final class ChangeStartPagePatch {
     }
 
     /**
-     * Intercepts onBackPressed before the Fragment Manager can create a blank screen.
-     */
-    public static boolean onBackPressed(Activity activity) {
-        Logger.printDebug(() -> "onBackPressed intercepted");
-
-        StartPage startPage = Settings.CHANGE_START_PAGE.get();
-        if (startPage == StartPage.DEFAULT) {
-            return true;
-        }
-
-        final long currentTime = System.currentTimeMillis();
-        if (currentTime - lastBackPressTime < 2000) {
-            return true;
-        }
-        lastBackPressTime = currentTime;
-
-        forceHome = true;
-
-        try {
-            Intent intent = new Intent(Intent.ACTION_VIEW);
-            intent.setData(android.net.Uri.parse("https://music.youtube.com/library"));
-            intent.setPackage(activity.getPackageName());
-            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-
-            Logger.printDebug(() -> "Rescuing app from blank screen - Launching Library intent");
-            activity.startActivity(intent);
-        } catch (Exception e) {
-            Logger.printException(() -> "Failed to launch recovery intent", e);
-        }
-
-        return false;
-    }
-
-    /**
      * Intercepts finish() at the Activity level when the app is about to close.
      * @return true to continue closing the app normally, false to consume it and load home.
      */
     public static boolean onFinish(Activity activity) {
-        Logger.printDebug(() -> "Activity finish() intercepted");
-
         StartPage startPage = Settings.CHANGE_START_PAGE.get();
-        if (startPage == StartPage.DEFAULT) {
+        if (startPage == StartPage.DEFAULT) return true;
+
+        String className = activity.getClass().getSimpleName();
+
+        if ("BrowserActivity".equals(className)) {
+            if (isStartPageOverridden) {
+                isStartPageOverridden = false;
+                try {
+                    Intent intent = new Intent(Intent.ACTION_VIEW);
+                    intent.setData(android.net.Uri.parse("https://music.youtube.com/library"));
+                    intent.setPackage(activity.getPackageName());
+                    intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                    activity.startActivity(intent);
+                } catch (Exception e) {
+                    Logger.printException(() -> "Failed to launch library recovery intent", e);
+                }
+            }
             return true;
         }
 
-        if (forceHome) {
-            return true;
-        }
+        if (forceHome) return true;
 
         forceHome = true;
 
@@ -259,8 +227,6 @@ public final class ChangeStartPagePatch {
             intent.setData(android.net.Uri.parse("https://music.youtube.com/"));
             intent.setPackage(activity.getPackageName());
             intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-
-            Logger.printDebug(() -> "Rescuing app from finish() - Launching Home intent");
             activity.startActivity(intent);
         } catch (Exception e) {
             Logger.printException(() -> "Failed to launch home intent", e);
