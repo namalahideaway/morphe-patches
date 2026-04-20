@@ -93,7 +93,7 @@ val changeStartPagePatch = bytecodePatch(
                     """
                         invoke-static { p0 }, $EXTENSION_CLASS->onBackPressed(Landroid/app/Activity;)Z
                         move-result v0
-                        if-eqz v0, :continue
+                        if-nez v0, :continue
                         return-void
                         :continue
                         nop

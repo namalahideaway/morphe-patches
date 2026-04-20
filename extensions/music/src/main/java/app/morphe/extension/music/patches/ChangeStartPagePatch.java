@@ -218,11 +218,16 @@ public final class ChangeStartPagePatch {
         lastBackPressTime = currentTime;
         forceHome = true;
 
-        Intent intent = activity.getPackageManager().getLaunchIntentForPackage(activity.getPackageName());
-        if (intent != null) {
-            Logger.printDebug(() -> "Launching back button escape intent");
-            intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        try {
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            intent.setData(android.net.Uri.parse("https://music.youtube.com/"));
+            intent.setPackage(activity.getPackageName());
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+
+            Logger.printDebug(() -> "Launching back button escape intent (Deep Link)");
             activity.startActivity(intent);
+        } catch (Exception e) {
+            Logger.printException(() -> "Failed to launch home intent", e);
         }
 
         return false;
