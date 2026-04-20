@@ -42,3 +42,10 @@ internal object BrowserActivityOnNewIntentFingerprint : Fingerprint(
     returnType = "V",
     parameters = listOf("Landroid/content/Intent;")
 )
+
+internal object BrowserActivityOnBackPressedFingerprint : Fingerprint(
+    definingClass = "Lcom/google/android/apps/youtube/music/browser/BrowserActivity;",
+    name = "onBackPressed",
+    returnType = "V",
+    parameters = listOf()
+)
