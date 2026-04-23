@@ -16,6 +16,7 @@ import androidx.annotation.Nullable;
 
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -441,10 +442,10 @@ final class KeywordContentFilter extends Filter {
                 // Instead, use all common case variations of the words.
                 String[] phraseVariations = {
                         phrase,
-                        phrase.toLowerCase(),
+                        phrase.toLowerCase(Locale.ROOT),
                         titleCaseFirstWordOnly(phrase),
                         capitalizeAllFirstLetters(phrase),
-                        phrase.toUpperCase()
+                        phrase.toUpperCase(Locale.ROOT)
                 };
 
                 if (phrasesWillHideAllVideos(phraseVariations, wholeWordMatching)) {
