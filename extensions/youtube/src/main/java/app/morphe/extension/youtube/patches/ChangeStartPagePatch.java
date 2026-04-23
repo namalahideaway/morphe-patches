@@ -89,26 +89,10 @@ public final class ChangeStartPagePatch {
 
     private static final StartPage START_PAGE = Settings.CHANGE_START_PAGE.get();
 
-    /**
-     * There is an issue where the back button on the toolbar doesn't work properly.
-     * As a workaround for this issue, instead of overriding the browserId multiple times, just override it once.
-     */
-    private static boolean appLaunched = false;
-
     public static String overrideBrowseId(String original) {
         if (!START_PAGE.isBrowseId()) {
             return original;
         }
-
-        if (!"FEwhat_to_watch".equals(original)) {
-            return original;
-        }
-
-        if (appLaunched) {
-            Logger.printDebug(() -> "Ignore override browseId as the app already launched");
-            return original;
-        }
-        appLaunched = true;
 
         Logger.printDebug(() -> "Changing browseId to: " + START_PAGE.id);
         return START_PAGE.id;
@@ -124,12 +108,6 @@ public final class ChangeStartPagePatch {
                     " as the current activity is not the entry point of the application");
             return;
         }
-
-        if (appLaunched) {
-            Logger.printDebug(() -> "Ignore override intent action as the app already launched");
-            return;
-        }
-        appLaunched = true;
 
         String intentAction = START_PAGE.id;
         Logger.printDebug(() -> "Changing intent action to: " + intentAction);
