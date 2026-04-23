@@ -18,9 +18,6 @@ import app.morphe.patches.music.misc.settings.settingsPatch
 import app.morphe.patches.music.shared.Constants.COMPATIBILITY_YOUTUBE_MUSIC
 import app.morphe.patches.music.shared.MusicActivityOnCreateFingerprint
 import app.morphe.patches.shared.misc.settings.preference.ListPreference
-import app.morphe.patches.shared.misc.settings.preference.PreferenceCategory
-import app.morphe.patches.shared.misc.settings.preference.PreferenceScreenPreference.Sorting
-import app.morphe.patches.shared.misc.settings.preference.SwitchPreference
 import app.morphe.util.getReference
 import app.morphe.util.indexOfFirstInstructionReversedOrThrow
 import com.android.tools.smali.dexlib2.Opcode
@@ -42,17 +39,9 @@ val changeStartPagePatch = bytecodePatch(
 
     execute {
         PreferenceScreen.GENERAL.addPreferences(
-            PreferenceCategory(
-                titleKey = null,
-                sorting = Sorting.UNSORTED,
-                tag = "app.morphe.extension.shared.settings.preference.NoTitlePreferenceCategory",
-                preferences = setOf(
-                    ListPreference(
-                        key = "morphe_change_start_page",
-                        tag = "app.morphe.extension.shared.settings.preference.SortedListPreference"
-                    ),
-                    SwitchPreference("morphe_change_start_page_always")
-                )
+            ListPreference(
+                key = "morphe_change_start_page",
+                tag = "app.morphe.extension.shared.settings.preference.SortedListPreference"
             )
         )
 

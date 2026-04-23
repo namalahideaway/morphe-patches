@@ -16,11 +16,8 @@ import android.os.Bundle;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import java.util.List;
-
 import app.morphe.extension.music.settings.Settings;
 import app.morphe.extension.shared.Logger;
-import app.morphe.extension.shared.settings.Setting;
 import app.morphe.extension.shared.Utils;
 
 @SuppressWarnings("unused")
@@ -68,21 +65,11 @@ public final class ChangeStartPagePatch {
     private static final String SHORTCUT_ID_SEARCH = "Eh4IBRDTnQEYmgMiEwiZn+H0r5WLAxVV5OcDHcHRBmPqpd25AQA=";
     private static final int SHORTCUT_TYPE_SEARCH = 1;
 
+    private static final boolean CHANGE_START_PAGE_ALWAYS = true;
+
     private static long appLaunchTime = 0;
     private static long lastFinishTime = 0;
     private static boolean isColdStartRouting = false;
-
-    public static class ChangeStartPageTypeAvailability implements Setting.Availability {
-        @Override
-        public boolean isAvailable() {
-            return Settings.CHANGE_START_PAGE.get() != StartPage.DEFAULT;
-        }
-
-        @Override
-        public List<Setting<?>> getParentSettings() {
-            return List.of(Settings.CHANGE_START_PAGE);
-        }
-    }
 
     private static void openSearch() {
         Activity mActivity = Utils.getActivity();
@@ -121,8 +108,7 @@ public final class ChangeStartPagePatch {
             String overrideBrowseId = startPage.id;
             if (overrideBrowseId.isEmpty()) return original;
 
-            final boolean changeAlways = Settings.CHANGE_START_PAGE_ALWAYS.get();
-            if (!changeAlways) {
+            if (!CHANGE_START_PAGE_ALWAYS) {
                 if (System.currentTimeMillis() - appLaunchTime > 5000) {
                     return original;
                 }
@@ -179,9 +165,8 @@ public final class ChangeStartPagePatch {
 
             if (ACTION_MAIN.equals(intent.getAction())) {
                 StartPage startPage = Settings.CHANGE_START_PAGE.get();
-                boolean changeAlways = Settings.CHANGE_START_PAGE_ALWAYS.get();
 
-                if (changeAlways && !startPage.isBrowseId() && startPage != StartPage.DEFAULT) {
+                if (CHANGE_START_PAGE_ALWAYS && !startPage.isBrowseId() && startPage != StartPage.DEFAULT) {
                     if (startPage == StartPage.SEARCH) {
                         Intent searchIntent = new Intent();
                         setSearchIntent(activity, searchIntent);
