@@ -6,12 +6,15 @@ import app.morphe.patcher.extensions.InstructionExtensions.addInstructionsWithLa
 import app.morphe.patcher.extensions.InstructionExtensions.getInstruction
 import app.morphe.patcher.patch.bytecodePatch
 import app.morphe.patcher.util.smali.ExternalLabel
+import app.morphe.patches.all.misc.resources.ResourceType
+import app.morphe.patches.all.misc.resources.getResourceId
 import app.morphe.patches.all.misc.resources.resourceMappingPatch
+import app.morphe.patches.shared.misc.settings.preference.PreferenceCategory
+import app.morphe.patches.shared.misc.settings.preference.PreferenceScreenPreference.Sorting
 import app.morphe.patches.shared.misc.settings.preference.SwitchPreference
 import app.morphe.patches.youtube.misc.extension.sharedExtensionPatch
 import app.morphe.patches.youtube.misc.playservice.is_20_28_or_greater
 import app.morphe.patches.youtube.misc.playservice.versionCheckPatch
-import app.morphe.patches.youtube.misc.settings.PreferenceScreen
 import app.morphe.patches.youtube.misc.settings.settingsPatch
 import app.morphe.patches.youtube.shared.Constants.COMPATIBILITY_YOUTUBE
 import app.morphe.patches.youtube.shared.LayoutConstructorFingerprint
@@ -37,6 +40,7 @@ val hidePlayerOverlayButtonsPatch = bytecodePatch(
     dependsOn(
         sharedExtensionPatch,
         settingsPatch,
+        playerOverlayButtonsSettingsPatch,
         resourceMappingPatch, // Used by fingerprints.
         versionCheckPatch
     )
@@ -44,20 +48,33 @@ val hidePlayerOverlayButtonsPatch = bytecodePatch(
     compatibleWith(COMPATIBILITY_YOUTUBE)
 
     execute {
-        PreferenceScreen.PLAYER.addPreferences(
-            SwitchPreference("morphe_hide_autoplay_button"),
-            SwitchPreference("morphe_hide_captions_button"),
-            SwitchPreference("morphe_hide_cast_button"),
-            SwitchPreference("morphe_hide_collapse_button"),
-            SwitchPreference("morphe_hide_fullscreen_button"),
-            SwitchPreference("morphe_hide_player_control_buttons_background"),
-            SwitchPreference("morphe_hide_player_previous_next_buttons"),
+        addPlayerOverlayPreferences(
+            PreferenceCategory(
+                titleKey = null,
+                sorting = Sorting.UNSORTED,
+                tag = "app.morphe.extension.shared.settings.preference.NoTitlePreferenceCategory",
+                preferences = setOf(
+                    SwitchPreference("morphe_hide_autoplay_button"),
+                    SwitchPreference("morphe_hide_captions_button"),
+                    SwitchPreference("morphe_hide_cast_button"),
+                    SwitchPreference("morphe_hide_collapse_button"),
+                    SwitchPreference("morphe_hide_fullscreen_button"),
+                    SwitchPreference("morphe_hide_player_control_buttons_background"),
+                    SwitchPreference("morphe_hide_player_previous_next_buttons"),
+                    SwitchPreference("morphe_hide_settings_button"),
+                )
+            )
         )
 
-        // region Hide player next/previous button.
+        // region Hide player previous/next & settings button.
 
         LayoutConstructorFingerprint.let {
             it.clearMatch() // Fingerprint is shared with other patches.
+
+            // Verify resources exist.
+            getResourceId(ResourceType.ID, "player_control_next_button_touch_area")
+            getResourceId(ResourceType.ID, "player_control_previous_button_touch_area")
+            getResourceId(ResourceType.ID, "player_overflow_button")
 
             it.method.apply {
                 val insertIndex = it.instructionMatches.last().index
@@ -67,6 +84,12 @@ val hidePlayerOverlayButtonsPatch = bytecodePatch(
                     insertIndex,
                     "invoke-static { v$viewRegister }, $EXTENSION_CLASS" +
                             "->hidePreviousNextButtons(Landroid/view/View;)V",
+                )
+
+                addInstruction(
+                    insertIndex,
+                    "invoke-static { v$viewRegister }, $EXTENSION_CLASS" +
+                            "->hideSettingsButton(Landroid/view/View;)V",
                 )
             }
         }
