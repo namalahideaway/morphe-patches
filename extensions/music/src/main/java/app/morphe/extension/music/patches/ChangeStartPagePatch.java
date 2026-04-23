@@ -65,12 +65,6 @@ public final class ChangeStartPagePatch {
     private static final String SHORTCUT_ID_SEARCH = "Eh4IBRDTnQEYmgMiEwiZn+H0r5WLAxVV5OcDHcHRBmPqpd25AQA=";
     private static final int SHORTCUT_TYPE_SEARCH = 1;
 
-    private static final boolean CHANGE_START_PAGE_ALWAYS = true;
-
-    private static long appLaunchTime = 0;
-    private static long lastFinishTime = 0;
-    private static boolean isColdStartRouting = false;
-
     private static void openSearch() {
         Activity mActivity = Utils.getActivity();
         if (mActivity == null) return;
@@ -108,11 +102,6 @@ public final class ChangeStartPagePatch {
             String overrideBrowseId = startPage.id;
             if (overrideBrowseId.isEmpty()) return original;
 
-            if (!CHANGE_START_PAGE_ALWAYS) {
-                if (System.currentTimeMillis() - appLaunchTime > 5000) {
-                    return original;
-                }
-            }
             return overrideBrowseId;
         } catch (Exception ex) {
             return original;
@@ -121,107 +110,34 @@ public final class ChangeStartPagePatch {
 
     public static void overrideIntentActionOnCreate(Activity activity, @Nullable Bundle savedInstanceState) {
         try {
-            if (savedInstanceState == null) {
-                appLaunchTime = System.currentTimeMillis();
-            } else {
-                return;
-            }
-
             StartPage startPage = Settings.CHANGE_START_PAGE.get();
             if (startPage == StartPage.DEFAULT || startPage.isBrowseId()) return;
 
             Intent originalIntent = activity.getIntent();
             if (originalIntent == null) return;
 
-            if (ACTION_MAIN.equals(originalIntent.getAction())) {
-                if (startPage == StartPage.SEARCH) {
-                    Intent searchIntent = new Intent();
-                    setSearchIntent(activity, searchIntent);
-                    searchIntent.addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION);
-                    activity.startActivity(searchIntent);
-                    activity.overridePendingTransition(0, 0);
-                }
-                else if (startPage == StartPage.LIKED_MUSIC || startPage == StartPage.EPISODES_FOR_LATER) {
-                    Intent intent = new Intent(Intent.ACTION_VIEW);
-                    intent.setData(android.net.Uri.parse("https://music.youtube.com/playlist?list=" + startPage.id));
-                    intent.setPackage(activity.getPackageName());
-                    intent.addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION | Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            if (!ACTION_MAIN.equals(originalIntent.getAction())) {
+                return;
+            }
 
-                    isColdStartRouting = true;
+            if (startPage == StartPage.SEARCH) {
+                Intent searchIntent = new Intent();
+                setSearchIntent(activity, searchIntent);
+                searchIntent.addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION);
+                activity.startActivity(searchIntent);
+                activity.overridePendingTransition(0, 0);
+            } else if (startPage == StartPage.LIKED_MUSIC || startPage == StartPage.EPISODES_FOR_LATER) {
+                Intent intent = new Intent(Intent.ACTION_VIEW);
+                intent.setData(android.net.Uri.parse("https://music.youtube.com/playlist?list=" + startPage.id));
+                intent.setPackage(activity.getPackageName());
+                intent.addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION | Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
 
-                    activity.startActivity(intent);
-                    activity.finishAndRemoveTask();
-                    activity.overridePendingTransition(0, 0);
-                }
+                activity.startActivity(intent);
+                activity.finishAndRemoveTask();
+                activity.overridePendingTransition(0, 0);
             }
         } catch (Exception ex ){
             Logger.printException(() -> "overrideIntentActionOnCreate failure", ex);
         }
-    }
-
-    public static void overrideIntentActionOnNewIntent(Activity activity, Intent intent) {
-        try {
-            if (intent == null) return;
-
-            if (ACTION_MAIN.equals(intent.getAction())) {
-                StartPage startPage = Settings.CHANGE_START_PAGE.get();
-
-                if (CHANGE_START_PAGE_ALWAYS && !startPage.isBrowseId() && startPage != StartPage.DEFAULT) {
-                    if (startPage == StartPage.SEARCH) {
-                        Intent searchIntent = new Intent();
-                        setSearchIntent(activity, searchIntent);
-                        searchIntent.addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION);
-                        activity.startActivity(searchIntent);
-                        activity.overridePendingTransition(0, 0);
-                    } else if (startPage == StartPage.LIKED_MUSIC || startPage == StartPage.EPISODES_FOR_LATER) {
-                        Intent newIntent = new Intent(Intent.ACTION_VIEW);
-                        newIntent.setData(android.net.Uri.parse("https://music.youtube.com/playlist?list=" + startPage.id));
-                        newIntent.setPackage(activity.getPackageName());
-                        newIntent.addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION);
-                        activity.startActivity(newIntent);
-                        activity.overridePendingTransition(0, 0);
-                    }
-                }
-            }
-        } catch (Exception ex ){
-            Logger.printException(() -> "overrideIntentActionOnNewIntent failure", ex);
-        }
-    }
-
-    /**
-     * Intercepts finish() at the Activity level when the app is about to close.
-     * @return true to continue closing the app normally, false to consume it and load home.
-     */
-    public static boolean onFinish(Activity activity) {
-        if (isColdStartRouting) {
-            isColdStartRouting = false;
-            return true;
-        }
-
-        StartPage startPage = Settings.CHANGE_START_PAGE.get();
-        if (startPage == StartPage.DEFAULT) return true;
-
-        String className = activity.getClass().getSimpleName();
-        if ("BrowserActivity".equals(className)) {
-            return true;
-        }
-
-        final long currentTime = System.currentTimeMillis();
-        if (currentTime - lastFinishTime < 2000) {
-            return true;
-        }
-        lastFinishTime = currentTime;
-
-        try {
-            Intent intent = new Intent(Intent.ACTION_VIEW);
-            intent.setData(android.net.Uri.parse("https://music.youtube.com/"));
-            intent.setPackage(activity.getPackageName());
-            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-            activity.startActivity(intent);
-        } catch (Exception e) {
-            Logger.printException(() -> "Failed to launch home intent", e);
-        }
-
-        return false;
     }
 }

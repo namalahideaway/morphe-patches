@@ -9,7 +9,6 @@ package app.morphe.patches.music.layout.startpage
 
 import app.morphe.patcher.extensions.InstructionExtensions.addInstruction
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
-import app.morphe.patcher.extensions.InstructionExtensions.addInstructionsWithLabels
 import app.morphe.patcher.extensions.InstructionExtensions.getInstruction
 import app.morphe.patcher.patch.bytecodePatch
 import app.morphe.patches.music.misc.extension.sharedExtensionPatch
@@ -69,26 +68,5 @@ val changeStartPagePatch = bytecodePatch(
             0,
             "invoke-static/range { p0 .. p1 }, $EXTENSION_CLASS->overrideIntentActionOnCreate(Landroid/app/Activity;Landroid/os/Bundle;)V"
         )
-
-        BrowserActivityOnNewIntentFingerprint.method.addInstruction(
-            0,
-            "invoke-static { p0, p1 }, $EXTENSION_CLASS->overrideIntentActionOnNewIntent(Landroid/app/Activity;Landroid/content/Intent;)V"
-        )
-
-        MusicActivityFinishFingerprint.let {
-            it.method.apply {
-                addInstructionsWithLabels(
-                    0,
-                    """
-                        invoke-static { p0 }, $EXTENSION_CLASS->onFinish(Landroid/app/Activity;)Z
-                        move-result v0
-                        if-nez v0, :continue
-                        return-void
-                        :continue
-                        nop
-                    """
-                )
-            }
-        }
     }
 }

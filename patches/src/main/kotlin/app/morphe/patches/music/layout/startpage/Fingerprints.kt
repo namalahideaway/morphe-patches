@@ -19,17 +19,3 @@ internal object ColdStartUpFingerprint : Fingerprint(
         string("FEmusic_home")
     )
 )
-
-internal object BrowserActivityOnNewIntentFingerprint : Fingerprint(
-    definingClass = "Lcom/google/android/apps/youtube/music/browser/BrowserActivity;",
-    name = "onNewIntent",
-    returnType = "V",
-    parameters = listOf("Landroid/content/Intent;")
-)
-
-internal object MusicActivityFinishFingerprint : Fingerprint(
-    classFingerprint = MusicActivityOnCreateFingerprint,
-    name = "finish",
-    returnType = "V",
-    parameters = listOf()
-)
