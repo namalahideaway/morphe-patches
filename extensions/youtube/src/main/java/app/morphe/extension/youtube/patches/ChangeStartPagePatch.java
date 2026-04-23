@@ -91,7 +91,7 @@ public final class ChangeStartPagePatch {
 
     private static final StartPage START_PAGE = Settings.CHANGE_START_PAGE.get();
 
-    private static final boolean CHANGE_START_PAGE_ALWAYS = true;
+    private static final boolean CHANGE_START_PAGE_ALWAYS = false;
 
     /**
      * There is an issue where the back button on the toolbar doesn't work properly.
@@ -101,6 +101,10 @@ public final class ChangeStartPagePatch {
 
     public static String overrideBrowseId(@NonNull String original) {
         if (!START_PAGE.isBrowseId()) {
+            return original;
+        }
+
+        if (!"FEwhat_to_watch".equals(original)) {
             return original;
         }
 
