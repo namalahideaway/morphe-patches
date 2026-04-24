@@ -23,8 +23,13 @@ import app.morphe.patcher.opcode
 import app.morphe.patcher.string
 import app.morphe.patches.all.misc.resources.ResourceType
 import app.morphe.patches.all.misc.resources.resourceLiteral
+import app.morphe.util.getReference
+import app.morphe.util.indexOfFirstInstruction
 import com.android.tools.smali.dexlib2.AccessFlags
 import com.android.tools.smali.dexlib2.Opcode
+import com.android.tools.smali.dexlib2.iface.Method
+import com.android.tools.smali.dexlib2.iface.reference.MethodReference
+import com.android.tools.smali.dexlib2.iface.reference.StringReference
 
 internal const val YOUTUBE_MAIN_ACTIVITY_CLASS_TYPE = "Lcom/google/android/apps/youtube/app/watchwhile/MainActivity;"
 
@@ -254,3 +259,24 @@ internal object WatchNextResponseParserFingerprint : Fingerprint(
         literal(46659098L),
     )
 )
+
+internal object SpannableStringBuilderFingerprint : Fingerprint(
+    returnType = "Ljava/lang/CharSequence;",
+    custom = { method, _ ->
+        method.indexOfFirstInstruction {
+            opcode == Opcode.CONST_STRING &&
+                    getReference<StringReference>()
+                        ?.string.toString()
+                        .startsWith("Failed to set PB Style Run Extension in TextComponentSpec.")
+        } >= 0 &&
+                indexOfSpannableStringInstruction(method) >= 0
+    }
+)
+
+const val SPANNABLE_STRING_REFERENCE =
+    "Landroid/text/SpannableString;->valueOf(Ljava/lang/CharSequence;)Landroid/text/SpannableString;"
+
+fun indexOfSpannableStringInstruction(method: Method) = method.indexOfFirstInstruction {
+    opcode == Opcode.INVOKE_STATIC &&
+            getReference<MethodReference>()?.toString() == SPANNABLE_STRING_REFERENCE
+}
