@@ -440,12 +440,17 @@ final class KeywordContentFilter extends Filter {
                 // not allow comparing two different byte arrays using simple plain array indexes.
                 //
                 // Instead, use all common case variations of the words.
+                Locale defaultLocale = Locale.getDefault();
                 String[] phraseVariations = {
                         phrase,
+                        // Use both root locale and device locale, to cover
+                        // English rules and device locale specific rules.
                         phrase.toLowerCase(Locale.ROOT),
+                        phrase.toLowerCase(defaultLocale),
                         titleCaseFirstWordOnly(phrase),
                         capitalizeAllFirstLetters(phrase),
-                        phrase.toUpperCase(Locale.ROOT)
+                        phrase.toUpperCase(Locale.ROOT),
+                        phrase.toUpperCase(defaultLocale)
                 };
 
                 if (phrasesWillHideAllVideos(phraseVariations, wholeWordMatching)) {
