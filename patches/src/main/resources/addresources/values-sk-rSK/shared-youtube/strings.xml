@@ -27,9 +27,11 @@ Second \"item\" text"</string>
   <string name="morphe_custom_branding_icon_entry_2">Morphe čierna</string>
   <string name="morphe_custom_branding_icon_entry_3">Morphe tmavá</string>
   <string name="morphe_custom_branding_icon_entry_4">Morphe svetlá</string>
+  <string name="morphe_custom_branding_icon_entry_5">Morphe hra</string>
   <!-- Translations of this should be identical to morphe_custom_branding_name_entry_5 -->
   <string name="morphe_custom_branding_icon_entry_6">Vlastná</string>
   <string name="morphe_custom_branding_notification_icon_title">Ikona upozornenia</string>
+  <string name="morphe_custom_branding_notification_icon_entry_1">Ikona aplikácie</string>
   <!-- misc.dns.checkWatchHistoryDomainNameResolutionPatch -->
   <string name="morphe_check_watch_history_domain_name_dialog_title">Upozornenie Morphe</string>
   <string name="morphe_check_watch_history_domain_name_dialog_message">Vaša história sledovania sa neukladá.&lt;br&gt;&lt;br&gt;Toto je s najväčšou pravdepodobnosťou spôsobené DNS blokovačom reklám alebo sieťovým proxy.&lt;br&gt;&lt;br&gt;Ak to chcete vyriešiť, pridajte &lt;b&gt;s.youtube.com&lt;/b&gt; do whitelistu alebo vypnite všetky DNS blokovače a proxy servery.</string>
@@ -109,6 +111,10 @@ Ak sa chcete prihlásiť, stlačte tlačidlo Pokračovať"</string>
   <string name="morphe_force_original_audio_title">Vynútiť pôvodný jazyk zvukovej stopy</string>
   <string name="morphe_force_original_audio_summary_on">Používa sa pôvodný jazyk zvukovej stopy</string>
   <string name="morphe_force_original_audio_summary_off">Používa sa predvolená zvuková stopa</string>
+  <!-- ad.hideFullscreenAdsPatch -->
+  <string name="morphe_hide_fullscreen_ads_title">Skryť reklamy na celú obrazovku</string>
+  <string name="morphe_hide_fullscreen_ads_summary_on">Reklamy na celú obrazovku sú skryté</string>
+  <string name="morphe_hide_fullscreen_ads_summary_off">Reklamy na celú obrazovku sa zobrazujú</string>
   <!-- 'Spoof video streams' should be the same translation used for 'morphe_spoof_video_streams_screen_title'. -->
   <string name="morphe_force_original_audio_not_available">Na používanie tejto funkcie zmeňte \'Falšovanie toku videa\' na Android Reel alebo TV</string>
   <!-- misc.privacy.sanitizeSharingLinksPatch -->
