@@ -175,18 +175,10 @@ val miniplayerPatch = bytecodePatch(
             // endregion
 
             // region Legacy tablet miniplayer hooks.
-            MiniplayerOverrideFingerprint.let {
-                it.instructionMatches.last()
-                    .getInstruction<ReferenceInstruction>()
-                    .getReference<MethodReference>()!!
-                    .getMutableMethod()
-                    .apply {
-                        findReturnIndicesReversed().forEach { index ->
-                            insertLegacyTabletMiniplayerOverride(
-                                index
-                            )
-                        }
-                    }
+            MiniplayerOverrideFingerprint.instructionMatches.last().getMethodCalled().apply {
+                findReturnIndicesReversed().forEach { index ->
+                    insertLegacyTabletMiniplayerOverride(index)
+                }
             }
 
             MiniplayerResponseModelSizeCheckFingerprint.let {

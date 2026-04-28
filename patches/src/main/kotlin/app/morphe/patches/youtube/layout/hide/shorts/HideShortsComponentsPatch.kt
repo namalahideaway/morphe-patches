@@ -229,10 +229,7 @@ val hideShortsComponentsPatch = bytecodePatch(
         }
 
         // Hook to hide the pivotBar when the Shorts player is opened.
-        ReelWatchFragmentInitPlaybackFingerprint.instructionMatches.last()
-            .instruction
-            .getReference<MethodReference>()!!
-            .getMutableMethod()
+        ReelWatchFragmentInitPlaybackFingerprint.instructionMatches.last().getMethodCalled()
             .addInstruction(
                 0,
                 "invoke-static { p1 }, $EXTENSION_FILTER->hidePivotBar(Ljava/lang/String;)V",

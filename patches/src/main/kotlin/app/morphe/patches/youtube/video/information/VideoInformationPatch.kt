@@ -38,7 +38,6 @@ import app.morphe.patches.youtube.video.videoid.hookVideoId
 import app.morphe.patches.youtube.video.videoid.videoIdPatch
 import app.morphe.util.addInstructionsAtControlFlowLabel
 import app.morphe.util.addStaticFieldToExtension
-import app.morphe.util.getMutableMethod
 import app.morphe.util.getReference
 import app.morphe.util.indexOfFirstInstructionOrThrow
 import com.android.tools.smali.dexlib2.AccessFlags
@@ -215,9 +214,7 @@ val videoInformationPatch = bytecodePatch(
          */
         timeMethodRef = WeakReference(
             PlayerControllerSetTimeReferenceFingerprint.instructionMatches.first()
-                .getInstruction<ReferenceInstruction>()
-                .getReference<MethodReference>()!!
-                .getMutableMethod()
+                .getMethodCalled()
         )
 
         /*
