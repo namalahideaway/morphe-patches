@@ -62,6 +62,8 @@ val miniplayerPatch = bytecodePatch(
 
         val preferences = mutableSetOf<BasePreference>()
 
+        preferences += SwitchPreference("morphe_disable_resuming_miniplayer")
+
         preferences +=
             if (is_20_37_or_greater) {
                 ListPreference("morphe_miniplayer_type")
@@ -159,6 +161,25 @@ val miniplayerPatch = bytecodePatch(
                 """
             )
         }
+
+        // region Disable resuming miniplayer (Continue watching)
+
+        ShowMiniplayerCommandFingerprint.let {
+            it.method.apply {
+                val index = it.instructionMatches[1].index
+                val register = getInstruction<OneRegisterInstruction>(index).registerA
+
+                addInstructions(
+                    index,
+                    """
+                        invoke-static { v$register }, $EXTENSION_CLASS->disableResumingStartupMiniPlayer(Z)Z
+                        move-result v$register
+                    """
+                )
+            }
+        }
+
+        // endregion
 
         // region Enable tablet miniplayer.
         // Parts of the YT code is removed in 20.37+ and the legacy player no longer works.
