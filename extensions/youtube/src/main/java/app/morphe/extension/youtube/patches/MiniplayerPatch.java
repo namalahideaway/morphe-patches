@@ -116,7 +116,7 @@ public final class MiniplayerPatch {
     }
 
     private static final boolean DISABLE_RESUMING_MINIPLAYER =
-            Settings.DISABLE_RESUMING_MINIPLAYER.get();
+            Settings.MINIPLAYER_DISABLE_RESUMING.get();
 
     private static final MiniplayerType CURRENT_TYPE = Settings.MINIPLAYER_TYPE.get();
 
