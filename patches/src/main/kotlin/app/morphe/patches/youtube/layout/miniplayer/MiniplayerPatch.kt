@@ -62,8 +62,6 @@ val miniplayerPatch = bytecodePatch(
 
         val preferences = mutableSetOf<BasePreference>()
 
-        preferences += SwitchPreference("morphe_disable_resuming_miniplayer")
-
         preferences +=
             if (is_20_37_or_greater) {
                 ListPreference("morphe_miniplayer_type")
@@ -75,7 +73,7 @@ val miniplayerPatch = bytecodePatch(
                 )
             }
 
-
+        preferences += SwitchPreference("morphe_disable_resuming_miniplayer")
         preferences += SwitchPreference("morphe_miniplayer_disable_drag_and_drop")
         preferences += SwitchPreference("morphe_miniplayer_disable_horizontal_drag")
         preferences += SwitchPreference("morphe_miniplayer_disable_rounded_corners")
