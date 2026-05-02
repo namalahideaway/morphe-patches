@@ -33,10 +33,16 @@ Second \"item\" text"</string>
   <string name="morphe_restore_old_settings_menus_summary_on">Köhnə tənzimləmələr bölmələri göstərilir</string>
   <string name="morphe_restore_old_settings_menus_summary_off">Köhnə tənzimləmələr bölmələri göstərilmir</string>
   <!-- misc.backgroundplayback.backgroundPlaybackPatch -->
+  <string name="morphe_remove_background_playback_restrictions_title">Fon oynatma məhdudiyyətlərini təmizlə</string>
+  <string name="morphe_remove_background_playback_restrictions_summary_on">Fon oynatma maneəsizdir</string>
+  <string name="morphe_remove_background_playback_restrictions_summary_off">Fon oynatma məhduddur</string>
   <string name="morphe_shorts_disable_background_playback_title">Shorts arxa plan oynatmasın qapat</string>
   <string name="morphe_shorts_disable_background_playback_summary_on">Shorts arxa plan oynatma qapalıdır</string>
   <string name="morphe_shorts_disable_background_playback_summary_off">Shorts arxa plan oynatma aktivdir</string>
   <!-- misc.debugging.enableDebuggingPatch -->
+  <string name="morphe_debug_protobuffer_title">Sazlanma qeydi protokol buferi</string>
+  <string name="morphe_debug_protobuffer_summary_on">Sazlanma qeydləri protokol buferləri yerləşdirir</string>
+  <string name="morphe_debug_protobuffer_summary_off">Sazlanma qeydləri protokol buferləri daxil etmir</string>
   <string name="morphe_debug_protobuffer_user_dialog_message">"Bu seçimi aktivləşdirmə bəzi UI quruluşları üçün ekran mətni də olmaqla əlavə tərtibat bazasını daxil edəcək.
 
 Bu, xüsusi filtrlər yaradarkən quruluşları müəyyən etməyə kömək edə bilər.
