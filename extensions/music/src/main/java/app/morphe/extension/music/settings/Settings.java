@@ -44,6 +44,9 @@ public class Settings extends SharedYouTubeSettings {
     public static final BooleanSetting ENABLE_FORCED_MINIPLAYER = new BooleanSetting("morphe_music_enable_forced_miniplayer", FALSE, true);
     public static final BooleanSetting PERMANENT_REPEAT = new BooleanSetting("morphe_music_play_permanent_repeat", FALSE, true);
 
+    // Auto-skip disliked songs
+    public static final BooleanSetting AUTO_SKIP_DISLIKED = new BooleanSetting("morphe_music_auto_skip_disliked", TRUE, true);
+
     // Crossfade
     public static final BooleanSetting CROSSFADE_ENABLED = new BooleanSetting("morphe_music_crossfade_enabled", FALSE, true);
     public static final EnumSetting<FadeCurve> CROSSFADE_CURVE = new EnumSetting<>("morphe_music_crossfade_curve", FadeCurve.EQUAL_POWER);
