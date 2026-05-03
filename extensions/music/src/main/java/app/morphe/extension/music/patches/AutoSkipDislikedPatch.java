@@ -35,6 +35,7 @@ public final class AutoSkipDislikedPatch {
     private AutoSkipDislikedPatch() {}
 
     public static void install(final Object containerUnused, final ImageView dislikeButton) {
+        Log.i(TAG, "install() entry: container=" + containerUnused + " btn=" + dislikeButton);
         if (dislikeButton == null) return;
         if (dislikeButton.getTag(LISTENER_INSTALLED_TAG) != null) return;
         dislikeButton.setTag(LISTENER_INSTALLED_TAG, Boolean.TRUE);
