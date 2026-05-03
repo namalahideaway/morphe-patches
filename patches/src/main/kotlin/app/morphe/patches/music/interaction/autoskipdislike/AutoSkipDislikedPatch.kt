@@ -50,7 +50,7 @@ val autoSkipDislikedPatch = bytecodePatch(
         method.addInstructions(
             dlIputIndex + 1,
             """
-                invoke-static { p0, v$touchImageViewReg }, $EXTENSION_CLASS->install(Lcom/google/android/apps/youtube/music/watchpage/MusicLikeDislikeButton;Landroid/widget/ImageView;)V
+                invoke-static { p0, v$touchImageViewReg }, $EXTENSION_CLASS->install(Ljava/lang/Object;Landroid/widget/ImageView;)V
             """,
         )
     }
