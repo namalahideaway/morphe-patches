@@ -24,7 +24,9 @@ private const val DISLIKE_FIELD =
 @Suppress("unused")
 val autoSkipDislikedPatch = bytecodePatch(
     name = "Auto-skip disliked songs",
-    description = "Skips songs rated thumbs-down. ONE skip per song to avoid Bluetooth stutter.",
+    description = "Skips songs rated thumbs-down. Direct in-process skip via " +
+        "patch_playNextInQueue — no MEDIA_BUTTON broadcast, so the disliked song " +
+        "never plays a frame and never appears in the now-playing UI.",
 ) {
     dependsOn(
         sharedExtensionPatch,
@@ -52,10 +54,21 @@ val autoSkipDislikedPatch = bytecodePatch(
             "invoke-static { p0, v$tivReg }, $EXTENSION_CLASS->install(Ljava/lang/Object;Ljava/lang/Object;)V",
         )
 
-        // Hook 2 + 3: call onCustomAction(name) after every CustomAction
-        // constructor in shd.i() / azri.l(). We pass ONLY the name register
-        // (already a CharSequence), so no scratch registers are clobbered —
-        // this avoids the VerifyError that broke azri.l() in v15.
+        // Hook 2: capture the Lasvr (MedialibPlayer) instance + bump per-song
+        // counter at the top of Lasvr;->p() (playVideo). The per-song counter
+        // is what the extension uses to dedup CustomAction observations — one
+        // skip per playVideo invocation, no time-based throttle.
+        //
+        // Coexists with CrossfadePatch's onPlayVideo hook on the same method;
+        // each addInstructions(0, ...) prepends so both run before the original.
+        PlayVideoFingerprint.method.addInstructions(
+            0,
+            "invoke-static { p0 }, $EXTENSION_CLASS->capturePlayer(Ljava/lang/Object;)V",
+        )
+
+        // Hook 3: invoke onCustomAction(name) after every CustomAction
+        // constructor in shd.i() / azri.l(). Single-arg form so no scratch
+        // register is needed (avoids the v15 VerifyError from clobbering v0).
         fun injectCustomAction(method: app.morphe.patcher.util.proxy.mutableTypes.MutableMethod) {
             val callIndices = method.findInstructionIndicesReversed(
                 methodCall(
