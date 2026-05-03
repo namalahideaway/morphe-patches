@@ -58,6 +58,7 @@ public final class AutoSkipDislikedPatch {
      * MEDIA_NEXT.
      */
     public static void onCustomAction(CharSequence name) {
+        Log.i(TAG, "onCustomAction: " + (name == null ? "null" : name.getClass().getName() + "=\"" + name.toString() + "\""));
         if (name == null) return;
         if (!isEnabled()) return;
         String s = name.toString();
