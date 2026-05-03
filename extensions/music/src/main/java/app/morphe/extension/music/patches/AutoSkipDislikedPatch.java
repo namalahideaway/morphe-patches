@@ -4,23 +4,23 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.media.AudioManager;
+import android.media.session.MediaController;
+import android.media.session.MediaSessionManager;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
 
+import java.util.List;
+
 import app.morphe.extension.music.settings.Settings;
 
 /**
  * Auto-skip songs already rated thumbs-down.
- *
- * Hook fires when YT Music constructs the "Dislike" custom action of its
- * PlaybackState. When the action's NAME is "Undo dislike" (vs "Dislike"),
- * the current song is rated down. We skip to next via a direct broadcast
- * of ACTION_MEDIA_BUTTON to YT Music's own MediaButtonReceiver — this
- * avoids the MEDIA_CONTENT_CONTROL permission requirement that
- * dispatchMediaKeyEvent() needs.
+ * Skip via several fallback methods, since dispatchMediaKeyEvent silently no-ops
+ * without MEDIA_CONTENT_CONTROL and broadcast routing to MusicBrowserService
+ * is sometimes ignored.
  *
  * @noinspection unused
  */
@@ -28,7 +28,6 @@ public final class AutoSkipDislikedPatch {
 
     private static final String TAG = "MorpheAutoSkip";
     private static final String SELF_PKG = "app.morphe.android.apps.youtube.music";
-    private static final String MBR_CLASS = "androidx.media.session.MediaButtonReceiver";
     private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
 
     private static volatile Context appContext = null;
@@ -66,7 +65,7 @@ public final class AutoSkipDislikedPatch {
         inflightSkip = true;
         lastSkipNs = now;
 
-        Log.i(TAG, "DETECTED disliked song name=\"" + s + "\" -> SKIP");
+        Log.i(TAG, "DETECTED disliked song -> SKIP");
 
         MAIN_HANDLER.post(new Runnable() {
             @Override public void run() {
@@ -76,9 +75,8 @@ public final class AutoSkipDislikedPatch {
                         Log.w(TAG, "  no app context");
                         return;
                     }
-                    sendMediaButton(ctx, KeyEvent.ACTION_DOWN);
-                    sendMediaButton(ctx, KeyEvent.ACTION_UP);
-                    Log.i(TAG, "  skip dispatched via MediaButtonReceiver broadcast");
+                    boolean dispatched = trySkip(ctx);
+                    Log.i(TAG, "  skip dispatched=" + dispatched);
                 } catch (Throwable t) {
                     Log.w(TAG, "  skip dispatch failed", t);
                 } finally {
@@ -90,21 +88,67 @@ public final class AutoSkipDislikedPatch {
         });
     }
 
-    /** Broadcast ACTION_MEDIA_BUTTON to YT Music's own receiver inside this process. */
-    private static void sendMediaButton(Context ctx, int action) {
-        Intent intent = new Intent(Intent.ACTION_MEDIA_BUTTON);
-        intent.setComponent(new ComponentName(SELF_PKG, MBR_CLASS));
-        KeyEvent ke = new KeyEvent(action, KeyEvent.KEYCODE_MEDIA_NEXT);
-        intent.putExtra(Intent.EXTRA_KEY_EVENT, ke);
+    /** Try several skip mechanisms; return true on first success. */
+    private static boolean trySkip(Context ctx) {
+        // (1) MediaController via session token from same process — best path,
+        //     no permission needed since we are the session owner.
         try {
-            ctx.sendBroadcast(intent);
+            MediaSessionManager msm = (MediaSessionManager) ctx.getSystemService(Context.MEDIA_SESSION_SERVICE);
+            if (msm != null) {
+                List<MediaController> sessions = msm.getActiveSessions(null);
+                for (MediaController c : sessions) {
+                    if (SELF_PKG.equals(c.getPackageName())) {
+                        c.getTransportControls().skipToNext();
+                        Log.i(TAG, "  used MediaController.skipToNext()");
+                        return true;
+                    }
+                }
+            }
+        } catch (SecurityException se) {
+            Log.i(TAG, "  no MEDIA_CONTENT_CONTROL: " + se.getMessage());
         } catch (Throwable t) {
-            Log.w(TAG, "  sendBroadcast failed: " + t);
-            // Fallback path
-            try {
-                AudioManager am = (AudioManager) ctx.getSystemService(Context.AUDIO_SERVICE);
-                if (am != null) am.dispatchMediaKeyEvent(ke);
-            } catch (Throwable ignored) {}
+            Log.w(TAG, "  MediaController path failed", t);
+        }
+
+        // (2) Broadcast ACTION_MEDIA_BUTTON to MusicBrowserService (the actual session host)
+        try {
+            sendMediaButton(ctx, "com.google.android.apps.youtube.music.mediabrowser.MusicBrowserService");
+            Log.i(TAG, "  sent MEDIA_BUTTON to MusicBrowserService");
+            return true;
+        } catch (Throwable t) {
+            Log.w(TAG, "  MusicBrowserService path failed", t);
+        }
+
+        // (3) AudioManager fallback (needs perm normally)
+        try {
+            AudioManager am = (AudioManager) ctx.getSystemService(Context.AUDIO_SERVICE);
+            if (am != null) {
+                am.dispatchMediaKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_NEXT));
+                am.dispatchMediaKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_NEXT));
+                Log.i(TAG, "  used AudioManager.dispatchMediaKeyEvent");
+                return true;
+            }
+        } catch (Throwable ignored) {}
+
+        return false;
+    }
+
+    private static void sendMediaButton(Context ctx, String serviceClassName) {
+        Intent down = new Intent(Intent.ACTION_MEDIA_BUTTON);
+        down.setComponent(new ComponentName(SELF_PKG, serviceClassName));
+        down.putExtra(Intent.EXTRA_KEY_EVENT, new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_NEXT));
+
+        Intent up = new Intent(Intent.ACTION_MEDIA_BUTTON);
+        up.setComponent(new ComponentName(SELF_PKG, serviceClassName));
+        up.putExtra(Intent.EXTRA_KEY_EVENT, new KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_NEXT));
+
+        // Try as service start first, then broadcast
+        try {
+            ctx.startService(down);
+            ctx.startService(up);
+        } catch (Throwable t) {
+            ctx.sendBroadcast(down);
+            ctx.sendBroadcast(up);
         }
     }
 
