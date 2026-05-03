@@ -24,7 +24,7 @@ private const val DISLIKE_FIELD =
 @Suppress("unused")
 val autoSkipDislikedPatch = bytecodePatch(
     name = "Auto-skip disliked songs",
-    description = "Auto-skips songs rated thumbs-down before audio plays.",
+    description = "Skips songs rated thumbs-down. ONE skip per song to avoid Bluetooth stutter.",
 ) {
     dependsOn(
         sharedExtensionPatch,
@@ -38,6 +38,7 @@ val autoSkipDislikedPatch = bytecodePatch(
             SwitchPreference("morphe_music_auto_skip_disliked"),
         )
 
+        // Hook 1: capture an Application context once.
         val ctxMethod = MusicLikeDislikeButtonOnFinishInflateFingerprint.method
         val dlIputIndex = ctxMethod.implementation!!.instructions.withIndex().firstOrNull { (_, ins) ->
             ins.opcode == Opcode.IPUT_OBJECT &&
@@ -51,6 +52,9 @@ val autoSkipDislikedPatch = bytecodePatch(
             "invoke-static { p0, v$tivReg }, $EXTENSION_CLASS->install(Ljava/lang/Object;Ljava/lang/Object;)V",
         )
 
+        // Hook 2 + 3: invoke onCustomAction(name, 0L) after every CustomAction
+        // constructor in shd.i() / azri.l(). Item id is unused — extension dedups
+        // via state-transition gate (re-arms only when a non-Undo action is seen).
         fun injectCustomAction(method: app.morphe.patcher.util.proxy.mutableTypes.MutableMethod) {
             val callIndices = method.findInstructionIndicesReversed(
                 methodCall(
@@ -66,23 +70,12 @@ val autoSkipDislikedPatch = bytecodePatch(
                 val nameReg = invoke.registerE
                 method.addInstructions(
                     idx + 1,
-                    "invoke-static { v$nameReg }, $EXTENSION_CLASS->onCustomAction(Ljava/lang/CharSequence;)V",
+                    "const-wide/16 v0, 0x0\n" +
+                        "invoke-static { v$nameReg, v0, v1 }, $EXTENSION_CLASS->onCustomAction(Ljava/lang/CharSequence;J)V",
                 )
             }
         }
         runCatching { injectCustomAction(SetCustomActionFingerprintShd.method) }
         runCatching { injectCustomAction(SetCustomActionFingerprintAzri.method) }
-
-        runCatching {
-            val pv = PlayVideoFingerprint.method
-            pv.addInstructions(
-                0,
-                """
-                    invoke-virtual { p0 }, Ljava/lang/Object;->toString()Ljava/lang/String;
-                    move-result-object v0
-                    invoke-static { v0 }, $EXTENSION_CLASS->onLoadVideo(Ljava/lang/String;)V
-                """,
-            )
-        }
     }
 }
