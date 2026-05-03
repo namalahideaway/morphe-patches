@@ -15,13 +15,25 @@ internal object MusicLikeDislikeButtonOnFinishInflateFingerprint : Fingerprint(
     },
 )
 
-/**
- * Matches the method that constructs PlaybackStateCompat$CustomAction objects.
- * YT Music calls this constructor for every playback-state custom action it
- * publishes (Like, Dislike, Shuffle, Repeat). The dislike action's NAME is
- * "Undo dislike" exactly when the current song is rated thumbs-down.
- */
-internal object CustomActionConstructorCallFingerprint : Fingerprint(
+/** Match shd.i() — the method that builds dislike CustomAction. */
+internal object SetCustomActionFingerprintA : Fingerprint(
+    accessFlags = listOf(AccessFlags.PRIVATE, AccessFlags.FINAL),
+    returnType = "V",
+    filters = listOf(
+        methodCall(
+            opcode = Opcode.INVOKE_DIRECT,
+            definingClass = "Landroid/support/v4/media/session/PlaybackStateCompat\$CustomAction;",
+            name = "<init>",
+            parameters = listOf("Ljava/lang/String;", "Ljava/lang/CharSequence;", "I", "Landroid/os/Bundle;"),
+            returnType = "V",
+        ),
+    ),
+)
+
+/** Match azri.* — second method building CustomAction. */
+internal object SetCustomActionFingerprintB : Fingerprint(
+    accessFlags = listOf(AccessFlags.PUBLIC, AccessFlags.FINAL),
+    returnType = "V",
     filters = listOf(
         methodCall(
             opcode = Opcode.INVOKE_DIRECT,
