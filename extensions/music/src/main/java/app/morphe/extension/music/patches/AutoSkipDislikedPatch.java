@@ -36,9 +36,8 @@ public final class AutoSkipDislikedPatch {
 
     private static volatile Context appContext = null;
 
-    // Re-armed whenever a NON-disliked custom action is observed (Like, Dislike,
-    // Shuffle off, Repeat off). The next "Undo dislike" we see will fire exactly
-    // one skip and disarm the gate until another non-disliked action arrives.
+    // Re-armed whenever a NON-disliked custom action is observed. The next
+    // "Undo dislike" we see fires exactly one skip and disarms the gate.
     private static volatile boolean armed = true;
     private static volatile long lastFireMs = 0L;
     private static final long MIN_FIRE_INTERVAL_MS = 3000L;
@@ -55,7 +54,7 @@ public final class AutoSkipDislikedPatch {
     }
 
     /** Called from the patch for every CustomAction.<init> in shd.i() / azri.l(). */
-    public static void onCustomAction(CharSequence name, long itemIdUnused) {
+    public static void onCustomAction(CharSequence name) {
         if (name == null) return;
         if (!isEnabled()) return;
         String s = name.toString();
@@ -66,7 +65,6 @@ public final class AutoSkipDislikedPatch {
                 || s.contains("undo dislike");
 
         if (!isDislikeRemoval) {
-            // Saw a non-disliked action — re-arm so the next genuine dislike fires.
             armed = true;
             return;
         }

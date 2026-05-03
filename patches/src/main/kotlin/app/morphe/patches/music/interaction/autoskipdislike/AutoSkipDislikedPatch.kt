@@ -52,9 +52,10 @@ val autoSkipDislikedPatch = bytecodePatch(
             "invoke-static { p0, v$tivReg }, $EXTENSION_CLASS->install(Ljava/lang/Object;Ljava/lang/Object;)V",
         )
 
-        // Hook 2 + 3: invoke onCustomAction(name, 0L) after every CustomAction
-        // constructor in shd.i() / azri.l(). Item id is unused — extension dedups
-        // via state-transition gate (re-arms only when a non-Undo action is seen).
+        // Hook 2 + 3: call onCustomAction(name) after every CustomAction
+        // constructor in shd.i() / azri.l(). We pass ONLY the name register
+        // (already a CharSequence), so no scratch registers are clobbered —
+        // this avoids the VerifyError that broke azri.l() in v15.
         fun injectCustomAction(method: app.morphe.patcher.util.proxy.mutableTypes.MutableMethod) {
             val callIndices = method.findInstructionIndicesReversed(
                 methodCall(
@@ -70,8 +71,7 @@ val autoSkipDislikedPatch = bytecodePatch(
                 val nameReg = invoke.registerE
                 method.addInstructions(
                     idx + 1,
-                    "const-wide/16 v0, 0x0\n" +
-                        "invoke-static { v$nameReg, v0, v1 }, $EXTENSION_CLASS->onCustomAction(Ljava/lang/CharSequence;J)V",
+                    "invoke-static { v$nameReg }, $EXTENSION_CLASS->onCustomAction(Ljava/lang/CharSequence;)V",
                 )
             }
         }
