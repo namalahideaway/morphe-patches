@@ -38,7 +38,6 @@ val autoSkipDislikedPatch = bytecodePatch(
             SwitchPreference("morphe_music_auto_skip_disliked"),
         )
 
-        // Hook 1: capture app context via MusicLikeDislikeButton.onFinishInflate
         val ctxMethod = MusicLikeDislikeButtonOnFinishInflateFingerprint.method
         val dlIputIndex = ctxMethod.implementation!!.instructions.withIndex().firstOrNull { (_, ins) ->
             ins.opcode == Opcode.IPUT_OBJECT &&
@@ -52,9 +51,7 @@ val autoSkipDislikedPatch = bytecodePatch(
             "invoke-static { p0, v$tivReg }, $EXTENSION_CLASS->install(Ljava/lang/Object;Ljava/lang/Object;)V",
         )
 
-        // Hook 2 + 3: inject onCustomAction(name) after each PlaybackStateCompat$CustomAction.<init>
-        // in BOTH known methods (shd.i and azri.l). Either may exist depending on YT Music build.
-        fun injectInto(method: app.morphe.patcher.util.proxy.mutableTypes.MutableMethod) {
+        fun injectCustomAction(method: app.morphe.patcher.util.proxy.mutableTypes.MutableMethod) {
             val callIndices = method.findInstructionIndicesReversed(
                 methodCall(
                     opcode = Opcode.INVOKE_DIRECT,
@@ -73,14 +70,19 @@ val autoSkipDislikedPatch = bytecodePatch(
                 )
             }
         }
+        runCatching { injectCustomAction(SetCustomActionFingerprintShd.method) }
+        runCatching { injectCustomAction(SetCustomActionFingerprintAzri.method) }
 
-        var hooked = 0
         runCatching {
-            injectInto(SetCustomActionFingerprintShd.method); hooked++
+            val pv = PlayVideoFingerprint.method
+            pv.addInstructions(
+                0,
+                """
+                    invoke-virtual { p0 }, Ljava/lang/Object;->toString()Ljava/lang/String;
+                    move-result-object v0
+                    invoke-static { v0 }, $EXTENSION_CLASS->onLoadVideo(Ljava/lang/String;)V
+                """,
+            )
         }
-        runCatching {
-            injectInto(SetCustomActionFingerprintAzri.method); hooked++
-        }
-        if (hooked == 0) error("No CustomAction-builder method matched")
     }
 }

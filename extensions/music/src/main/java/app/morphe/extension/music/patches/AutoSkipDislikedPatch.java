@@ -1,6 +1,5 @@
 package app.morphe.extension.music.patches;
 
-import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.media.AudioManager;
@@ -13,7 +12,10 @@ import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
 
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import app.morphe.extension.music.settings.Settings;
 
@@ -23,10 +25,13 @@ public final class AutoSkipDislikedPatch {
     private static final String SELF_PKG = "app.morphe.android.apps.youtube.music";
     private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
 
+    private static final Set<String> DISLIKED_IDS = Collections.synchronizedSet(new HashSet<String>());
+
     private static volatile Context appContext = null;
     private static volatile boolean inflightSkip = false;
     private static volatile long lastSkipNs = 0L;
-    private static final long SKIP_DEDUP_NS = 1_200_000_000L; // 1.2s
+    private static volatile String lastSeenVideoId = null;
+    private static final long SKIP_DEDUP_NS = 800000000L;
 
     private AutoSkipDislikedPatch() {}
 
@@ -35,11 +40,8 @@ public final class AutoSkipDislikedPatch {
         try {
             if (dislikeButton instanceof View) {
                 appContext = ((View) dislikeButton).getContext().getApplicationContext();
-                Log.i(TAG, "  captured app context");
             }
-        } catch (Throwable t) {
-            Log.w(TAG, "ctx capture failed", t);
-        }
+        } catch (Throwable t) {}
     }
 
     public static void onCustomAction(CharSequence name) {
@@ -51,35 +53,52 @@ public final class AutoSkipDislikedPatch {
                 && !s.contains("undo dislike")) {
             return;
         }
+        String vid = lastSeenVideoId;
+        if (vid != null) {
+            if (DISLIKED_IDS.add(vid)) {
+                Log.i(TAG, "BLACKLIST + " + vid + " (now " + DISLIKED_IDS.size() + " entries)");
+            }
+        }
+        fireSkip("Undo dislike state");
+    }
 
+    public static void onLoadVideo(String videoId) {
+        if (videoId == null || videoId.isEmpty()) return;
+        lastSeenVideoId = videoId;
+        if (!isEnabled()) return;
+        Log.i(TAG, "onLoadVideo: " + videoId.substring(0, Math.min(60, videoId.length())));
+        if (DISLIKED_IDS.contains(videoId)) {
+            Log.i(TAG, "PRE-EMPT " + videoId);
+            fireSkip("blacklist hit on loadVideo");
+        }
+    }
+
+    private static void fireSkip(String reason) {
         long now = System.nanoTime();
         if (inflightSkip) return;
         if (now - lastSkipNs < SKIP_DEDUP_NS) return;
         inflightSkip = true;
         lastSkipNs = now;
 
-        Log.i(TAG, "DETECTED disliked song -> SKIP");
+        Log.i(TAG, "SKIP -> " + reason);
 
-        // Defer skip slightly so YT Music finishes its initial state setup
-        MAIN_HANDLER.postDelayed(new Runnable() {
+        MAIN_HANDLER.post(new Runnable() {
             @Override public void run() {
                 try {
                     Context ctx = appContext;
                     if (ctx == null) return;
                     boolean ok = trySkipChain(ctx);
-                    Log.i(TAG, "  chain result=" + ok);
+                    Log.i(TAG, "  dispatched=" + ok);
                 } finally {
                     MAIN_HANDLER.postDelayed(new Runnable() {
                         @Override public void run() { inflightSkip = false; }
-                    }, 1200);
+                    }, 800);
                 }
             }
-        }, 50L);
+        });
     }
 
-    /** Try every skip method we know of, in order. */
     private static boolean trySkipChain(Context ctx) {
-        // (1) MediaController via session manager (needs MEDIA_CONTENT_CONTROL — unlikely)
         try {
             MediaSessionManager msm = (MediaSessionManager) ctx.getSystemService(Context.MEDIA_SESSION_SERVICE);
             if (msm != null) {
@@ -87,46 +106,35 @@ public final class AutoSkipDislikedPatch {
                 for (MediaController c : sessions) {
                     if (SELF_PKG.equals(c.getPackageName())) {
                         c.getTransportControls().skipToNext();
-                        Log.i(TAG, "  MediaController.skipToNext() OK");
                         return true;
                     }
                 }
             }
-        } catch (Throwable t) {
-            Log.i(TAG, "  (1) MediaController failed: " + t.getMessage());
-        }
+        } catch (Throwable ignored) {}
 
-        // (2) Broadcast media button event with NO target component — let Android route
-        //     to the registered media-button receiver for the current media-button session.
         try {
             long t = SystemClock.uptimeMillis();
             KeyEvent down = new KeyEvent(t, t, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_NEXT, 0);
             KeyEvent up = new KeyEvent(t, t + 1, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_NEXT, 0);
-
             Intent dIntent = new Intent(Intent.ACTION_MEDIA_BUTTON);
             dIntent.putExtra(Intent.EXTRA_KEY_EVENT, down);
             dIntent.setPackage(SELF_PKG);
             ctx.sendBroadcast(dIntent);
-
             Intent uIntent = new Intent(Intent.ACTION_MEDIA_BUTTON);
             uIntent.putExtra(Intent.EXTRA_KEY_EVENT, up);
             uIntent.setPackage(SELF_PKG);
             ctx.sendBroadcast(uIntent);
-
-            Log.i(TAG, "  (2) sent ACTION_MEDIA_BUTTON broadcasts (pkg-scoped)");
             return true;
         } catch (Throwable t) {
-            Log.i(TAG, "  (2) broadcast failed: " + t.getMessage());
+            Log.w(TAG, "broadcast failed", t);
         }
 
-        // (3) AudioManager fallback
         try {
             AudioManager am = (AudioManager) ctx.getSystemService(Context.AUDIO_SERVICE);
             if (am != null) {
                 long t = SystemClock.uptimeMillis();
                 am.dispatchMediaKeyEvent(new KeyEvent(t, t, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_NEXT, 0));
                 am.dispatchMediaKeyEvent(new KeyEvent(t, t + 1, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_NEXT, 0));
-                Log.i(TAG, "  (3) AudioManager dispatched");
                 return true;
             }
         } catch (Throwable ignored) {}

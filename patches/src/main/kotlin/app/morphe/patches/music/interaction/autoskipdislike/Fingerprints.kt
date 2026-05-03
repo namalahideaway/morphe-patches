@@ -23,16 +23,19 @@ private val customActionInitFilter = methodCall(
     returnType = "V",
 )
 
-/** Match shd.i() — private final returning V, calling CustomAction constructor */
 internal object SetCustomActionFingerprintShd : Fingerprint(
     accessFlags = listOf(AccessFlags.PRIVATE, AccessFlags.FINAL),
     returnType = "V",
     filters = listOf(customActionInitFilter),
 )
 
-/** Match azri.l() — private final returning Lip, calling CustomAction constructor */
 internal object SetCustomActionFingerprintAzri : Fingerprint(
     accessFlags = listOf(AccessFlags.PRIVATE, AccessFlags.FINAL),
     returnType = "Lip;",
     filters = listOf(customActionInitFilter),
+)
+
+internal object PlayVideoFingerprint : Fingerprint(
+    returnType = "V",
+    strings = listOf("playVideo", "MedialibPlayer.playVideo()"),
 )
