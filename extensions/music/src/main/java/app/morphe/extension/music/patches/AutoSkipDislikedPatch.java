@@ -8,6 +8,7 @@ import android.media.session.MediaController;
 import android.media.session.MediaSessionManager;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
@@ -16,14 +17,6 @@ import java.util.List;
 
 import app.morphe.extension.music.settings.Settings;
 
-/**
- * Auto-skip songs already rated thumbs-down.
- * Skip via several fallback methods, since dispatchMediaKeyEvent silently no-ops
- * without MEDIA_CONTENT_CONTROL and broadcast routing to MusicBrowserService
- * is sometimes ignored.
- *
- * @noinspection unused
- */
 public final class AutoSkipDislikedPatch {
 
     private static final String TAG = "MorpheAutoSkip";
@@ -33,7 +26,7 @@ public final class AutoSkipDislikedPatch {
     private static volatile Context appContext = null;
     private static volatile boolean inflightSkip = false;
     private static volatile long lastSkipNs = 0L;
-    private static final long SKIP_DEDUP_NS = 1_500_000_000L;
+    private static final long SKIP_DEDUP_NS = 1_200_000_000L; // 1.2s
 
     private AutoSkipDislikedPatch() {}
 
@@ -67,31 +60,26 @@ public final class AutoSkipDislikedPatch {
 
         Log.i(TAG, "DETECTED disliked song -> SKIP");
 
-        MAIN_HANDLER.post(new Runnable() {
+        // Defer skip slightly so YT Music finishes its initial state setup
+        MAIN_HANDLER.postDelayed(new Runnable() {
             @Override public void run() {
                 try {
                     Context ctx = appContext;
-                    if (ctx == null) {
-                        Log.w(TAG, "  no app context");
-                        return;
-                    }
-                    boolean dispatched = trySkip(ctx);
-                    Log.i(TAG, "  skip dispatched=" + dispatched);
-                } catch (Throwable t) {
-                    Log.w(TAG, "  skip dispatch failed", t);
+                    if (ctx == null) return;
+                    boolean ok = trySkipChain(ctx);
+                    Log.i(TAG, "  chain result=" + ok);
                 } finally {
                     MAIN_HANDLER.postDelayed(new Runnable() {
                         @Override public void run() { inflightSkip = false; }
-                    }, 1500);
+                    }, 1200);
                 }
             }
-        });
+        }, 50L);
     }
 
-    /** Try several skip mechanisms; return true on first success. */
-    private static boolean trySkip(Context ctx) {
-        // (1) MediaController via session token from same process — best path,
-        //     no permission needed since we are the session owner.
+    /** Try every skip method we know of, in order. */
+    private static boolean trySkipChain(Context ctx) {
+        // (1) MediaController via session manager (needs MEDIA_CONTENT_CONTROL — unlikely)
         try {
             MediaSessionManager msm = (MediaSessionManager) ctx.getSystemService(Context.MEDIA_SESSION_SERVICE);
             if (msm != null) {
@@ -99,57 +87,51 @@ public final class AutoSkipDislikedPatch {
                 for (MediaController c : sessions) {
                     if (SELF_PKG.equals(c.getPackageName())) {
                         c.getTransportControls().skipToNext();
-                        Log.i(TAG, "  used MediaController.skipToNext()");
+                        Log.i(TAG, "  MediaController.skipToNext() OK");
                         return true;
                     }
                 }
             }
-        } catch (SecurityException se) {
-            Log.i(TAG, "  no MEDIA_CONTENT_CONTROL: " + se.getMessage());
         } catch (Throwable t) {
-            Log.w(TAG, "  MediaController path failed", t);
+            Log.i(TAG, "  (1) MediaController failed: " + t.getMessage());
         }
 
-        // (2) Broadcast ACTION_MEDIA_BUTTON to MusicBrowserService (the actual session host)
+        // (2) Broadcast media button event with NO target component — let Android route
+        //     to the registered media-button receiver for the current media-button session.
         try {
-            sendMediaButton(ctx, "com.google.android.apps.youtube.music.mediabrowser.MusicBrowserService");
-            Log.i(TAG, "  sent MEDIA_BUTTON to MusicBrowserService");
+            long t = SystemClock.uptimeMillis();
+            KeyEvent down = new KeyEvent(t, t, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_NEXT, 0);
+            KeyEvent up = new KeyEvent(t, t + 1, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_NEXT, 0);
+
+            Intent dIntent = new Intent(Intent.ACTION_MEDIA_BUTTON);
+            dIntent.putExtra(Intent.EXTRA_KEY_EVENT, down);
+            dIntent.setPackage(SELF_PKG);
+            ctx.sendBroadcast(dIntent);
+
+            Intent uIntent = new Intent(Intent.ACTION_MEDIA_BUTTON);
+            uIntent.putExtra(Intent.EXTRA_KEY_EVENT, up);
+            uIntent.setPackage(SELF_PKG);
+            ctx.sendBroadcast(uIntent);
+
+            Log.i(TAG, "  (2) sent ACTION_MEDIA_BUTTON broadcasts (pkg-scoped)");
             return true;
         } catch (Throwable t) {
-            Log.w(TAG, "  MusicBrowserService path failed", t);
+            Log.i(TAG, "  (2) broadcast failed: " + t.getMessage());
         }
 
-        // (3) AudioManager fallback (needs perm normally)
+        // (3) AudioManager fallback
         try {
             AudioManager am = (AudioManager) ctx.getSystemService(Context.AUDIO_SERVICE);
             if (am != null) {
-                am.dispatchMediaKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_NEXT));
-                am.dispatchMediaKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_NEXT));
-                Log.i(TAG, "  used AudioManager.dispatchMediaKeyEvent");
+                long t = SystemClock.uptimeMillis();
+                am.dispatchMediaKeyEvent(new KeyEvent(t, t, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_NEXT, 0));
+                am.dispatchMediaKeyEvent(new KeyEvent(t, t + 1, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_NEXT, 0));
+                Log.i(TAG, "  (3) AudioManager dispatched");
                 return true;
             }
         } catch (Throwable ignored) {}
 
         return false;
-    }
-
-    private static void sendMediaButton(Context ctx, String serviceClassName) {
-        Intent down = new Intent(Intent.ACTION_MEDIA_BUTTON);
-        down.setComponent(new ComponentName(SELF_PKG, serviceClassName));
-        down.putExtra(Intent.EXTRA_KEY_EVENT, new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_NEXT));
-
-        Intent up = new Intent(Intent.ACTION_MEDIA_BUTTON);
-        up.setComponent(new ComponentName(SELF_PKG, serviceClassName));
-        up.putExtra(Intent.EXTRA_KEY_EVENT, new KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_NEXT));
-
-        // Try as service start first, then broadcast
-        try {
-            ctx.startService(down);
-            ctx.startService(up);
-        } catch (Throwable t) {
-            ctx.sendBroadcast(down);
-            ctx.sendBroadcast(up);
-        }
     }
 
     private static boolean isEnabled() {
