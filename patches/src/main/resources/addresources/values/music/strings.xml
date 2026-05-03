@@ -91,6 +91,9 @@ Feature implementation by VazerOG"</string>
 
     <!-- interaction.permanentrepeat.permanentRepeatPatch -->
     <string name="morphe_music_play_permanent_repeat_title">Enable permanent repeat</string>
+    <string name="morphe_music_auto_skip_disliked_title">Auto-skip disliked songs</string>
+    <string name="morphe_music_auto_skip_disliked_summary_on">Tapping the thumbs-down button skips the song automatically</string>
+    <string name="morphe_music_auto_skip_disliked_summary_off">Disliking a song does not skip it</string>
     <string name="morphe_music_play_permanent_repeat_summary_on">Permanent repeat is enabled</string>
     <string name="morphe_music_play_permanent_repeat_summary_off">Permanent repeat is disabled</string>
 
