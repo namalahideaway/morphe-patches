@@ -15,25 +15,13 @@ internal object MusicLikeDislikeButtonOnFinishInflateFingerprint : Fingerprint(
     },
 )
 
-/** Match shd.i() — the method that builds dislike CustomAction. */
-internal object SetCustomActionFingerprintA : Fingerprint(
-    accessFlags = listOf(AccessFlags.PRIVATE, AccessFlags.FINAL),
-    returnType = "V",
-    filters = listOf(
-        methodCall(
-            opcode = Opcode.INVOKE_DIRECT,
-            definingClass = "Landroid/support/v4/media/session/PlaybackStateCompat\$CustomAction;",
-            name = "<init>",
-            parameters = listOf("Ljava/lang/String;", "Ljava/lang/CharSequence;", "I", "Landroid/os/Bundle;"),
-            returnType = "V",
-        ),
-    ),
-)
-
-/** Match azri.* — second method building CustomAction. */
-internal object SetCustomActionFingerprintB : Fingerprint(
-    accessFlags = listOf(AccessFlags.PUBLIC, AccessFlags.FINAL),
-    returnType = "V",
+/**
+ * Match any private/public method (any return type, any params) that calls
+ * PlaybackStateCompat$CustomAction.<init>(String, CharSequence, int, Bundle).
+ * We don't constrain access flags or return type — different YT Music builds
+ * use different signatures (V or Lip etc).
+ */
+internal object SetCustomActionFingerprint : Fingerprint(
     filters = listOf(
         methodCall(
             opcode = Opcode.INVOKE_DIRECT,

@@ -38,7 +38,7 @@ val autoSkipDislikedPatch = bytecodePatch(
             SwitchPreference("morphe_music_auto_skip_disliked"),
         )
 
-        // ---- Hook 1: capture app context via MusicLikeDislikeButton.onFinishInflate
+        // Hook 1: capture app context via MusicLikeDislikeButton.onFinishInflate
         val ctxMethod = MusicLikeDislikeButtonOnFinishInflateFingerprint.method
         val dlIputIndex = ctxMethod.implementation!!.instructions.withIndex().firstOrNull { (_, ins) ->
             ins.opcode == Opcode.IPUT_OBJECT &&
@@ -52,33 +52,26 @@ val autoSkipDislikedPatch = bytecodePatch(
             "invoke-static { p0, v$tivReg }, $EXTENSION_CLASS->install(Ljava/lang/Object;Ljava/lang/Object;)V",
         )
 
-        // Helper: inject hook AFTER each CustomAction <init> call within a given method
-        fun injectInto(method: app.morphe.patcher.util.proxy.mutableTypes.MutableMethod) {
-            val callIndices = method.findInstructionIndicesReversed(
-                methodCall(
-                    opcode = Opcode.INVOKE_DIRECT,
-                    definingClass = "Landroid/support/v4/media/session/PlaybackStateCompat\$CustomAction;",
-                    name = "<init>",
-                    parameters = listOf("Ljava/lang/String;", "Ljava/lang/CharSequence;", "I", "Landroid/os/Bundle;"),
-                    returnType = "V",
-                ),
+        // Hook 2: inject onCustomAction(name) after each PlaybackStateCompat$CustomAction.<init>
+        val target = SetCustomActionFingerprint.method
+        val callIndices = target.findInstructionIndicesReversed(
+            methodCall(
+                opcode = Opcode.INVOKE_DIRECT,
+                definingClass = "Landroid/support/v4/media/session/PlaybackStateCompat\$CustomAction;",
+                name = "<init>",
+                parameters = listOf("Ljava/lang/String;", "Ljava/lang/CharSequence;", "I", "Landroid/os/Bundle;"),
+                returnType = "V",
+            ),
+        )
+        check(callIndices.isNotEmpty()) { "no CustomAction constructor call sites found in matched method" }
+        callIndices.forEach { idx ->
+            val invoke = target.getInstruction<FiveRegisterInstruction>(idx)
+            // invoke-direct {receiver, action, name, icon, bundle} -> registerC..G
+            val nameReg = invoke.registerE
+            target.addInstructions(
+                idx + 1,
+                "invoke-static { v$nameReg }, $EXTENSION_CLASS->onCustomAction(Ljava/lang/CharSequence;)V",
             )
-            callIndices.forEach { idx ->
-                val invoke = method.getInstruction<FiveRegisterInstruction>(idx)
-                // {receiver, action, name, icon, bundle} -> registers C, D, E, F, G
-                val nameReg = invoke.registerE
-                method.addInstructions(
-                    idx + 1,
-                    "invoke-static { v$nameReg }, $EXTENSION_CLASS->onCustomAction(Ljava/lang/CharSequence;)V",
-                )
-            }
         }
-
-        // Try both fingerprints — neither guaranteed but both target the CustomAction
-        // constructor invocation in YT Music's notification/state-builder code.
-        runCatching { injectInto(SetCustomActionFingerprintA.method) }
-            .onFailure { println("[autoSkipDisliked] hook A failed: ${it.message}") }
-        runCatching { injectInto(SetCustomActionFingerprintB.method) }
-            .onFailure { println("[autoSkipDisliked] hook B failed: ${it.message}") }
     }
 }
