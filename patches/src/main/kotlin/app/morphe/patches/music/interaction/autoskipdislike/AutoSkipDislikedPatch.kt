@@ -52,26 +52,35 @@ val autoSkipDislikedPatch = bytecodePatch(
             "invoke-static { p0, v$tivReg }, $EXTENSION_CLASS->install(Ljava/lang/Object;Ljava/lang/Object;)V",
         )
 
-        // Hook 2: inject onCustomAction(name) after each PlaybackStateCompat$CustomAction.<init>
-        val target = SetCustomActionFingerprint.method
-        val callIndices = target.findInstructionIndicesReversed(
-            methodCall(
-                opcode = Opcode.INVOKE_DIRECT,
-                definingClass = "Landroid/support/v4/media/session/PlaybackStateCompat\$CustomAction;",
-                name = "<init>",
-                parameters = listOf("Ljava/lang/String;", "Ljava/lang/CharSequence;", "I", "Landroid/os/Bundle;"),
-                returnType = "V",
-            ),
-        )
-        check(callIndices.isNotEmpty()) { "no CustomAction constructor call sites found in matched method" }
-        callIndices.forEach { idx ->
-            val invoke = target.getInstruction<FiveRegisterInstruction>(idx)
-            // invoke-direct {receiver, action, name, icon, bundle} -> registerC..G
-            val nameReg = invoke.registerE
-            target.addInstructions(
-                idx + 1,
-                "invoke-static { v$nameReg }, $EXTENSION_CLASS->onCustomAction(Ljava/lang/CharSequence;)V",
+        // Hook 2 + 3: inject onCustomAction(name) after each PlaybackStateCompat$CustomAction.<init>
+        // in BOTH known methods (shd.i and azri.l). Either may exist depending on YT Music build.
+        fun injectInto(method: app.morphe.patcher.util.proxy.mutableTypes.MutableMethod) {
+            val callIndices = method.findInstructionIndicesReversed(
+                methodCall(
+                    opcode = Opcode.INVOKE_DIRECT,
+                    definingClass = "Landroid/support/v4/media/session/PlaybackStateCompat\$CustomAction;",
+                    name = "<init>",
+                    parameters = listOf("Ljava/lang/String;", "Ljava/lang/CharSequence;", "I", "Landroid/os/Bundle;"),
+                    returnType = "V",
+                ),
             )
+            callIndices.forEach { idx ->
+                val invoke = method.getInstruction<FiveRegisterInstruction>(idx)
+                val nameReg = invoke.registerE
+                method.addInstructions(
+                    idx + 1,
+                    "invoke-static { v$nameReg }, $EXTENSION_CLASS->onCustomAction(Ljava/lang/CharSequence;)V",
+                )
+            }
         }
+
+        var hooked = 0
+        runCatching {
+            injectInto(SetCustomActionFingerprintShd.method); hooked++
+        }
+        runCatching {
+            injectInto(SetCustomActionFingerprintAzri.method); hooked++
+        }
+        if (hooked == 0) error("No CustomAction-builder method matched")
     }
 }
