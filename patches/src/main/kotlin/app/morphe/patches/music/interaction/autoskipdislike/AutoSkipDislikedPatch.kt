@@ -54,16 +54,29 @@ val autoSkipDislikedPatch = bytecodePatch(
             "invoke-static { p0, v$tivReg }, $EXTENSION_CLASS->install(Ljava/lang/Object;Ljava/lang/Object;)V",
         )
 
-        // Hook 2: capture the Lasvr (MedialibPlayer) instance + bump per-song
-        // counter at the top of Lasvr;->p() (playVideo). The per-song counter
-        // is what the extension uses to dedup CustomAction observations — one
-        // skip per playVideo invocation, no time-based throttle.
+        // Hook 2: at the very top of Lasvr;->p() (playVideo):
+        //   (a) preCheckSkip(p0) — read videoId off the queue chain via reflection,
+        //       look it up in the persisted disliked set; if hit, call o()
+        //       (playNextInQueue) and return-void IMMEDIATELY so no audio loads
+        //       and no UI flash occurs for previously-disliked tracks.
+        //   (b) capturePlayer(p0) — keep the existing player capture + per-song
+        //       counter bump, used by the CustomAction-driven first-encounter
+        //       detection path.
         //
-        // Coexists with CrossfadePatch's onPlayVideo hook on the same method;
-        // each addInstructions(0, ...) prepends so both run before the original.
+        // Each addInstructions(0, ...) prepends so this whole block runs before
+        // CrossfadePatch's onPlayVideo hook and the original method body.
+        val playerClass = PlayVideoFingerprint.classDef.type  // e.g. "Lasvr;"
         PlayVideoFingerprint.method.addInstructions(
             0,
-            "invoke-static { p0 }, $EXTENSION_CLASS->capturePlayer(Ljava/lang/Object;)V",
+            """
+                invoke-static { p0 }, $EXTENSION_CLASS->preCheckSkip(Ljava/lang/Object;)Z
+                move-result v0
+                if-eqz v0, :morphe_continue_play
+                invoke-virtual { p0 }, $playerClass->o()V
+                return-void
+                :morphe_continue_play
+                invoke-static { p0 }, $EXTENSION_CLASS->capturePlayer(Ljava/lang/Object;)V
+            """.trimIndent(),
         )
 
         // Hook 3: invoke onCustomAction(name) after every CustomAction
